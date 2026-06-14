@@ -1,20 +1,41 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:LTFI.ViewModels"
+        xmlns:views="using:LTFI.Views"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        mc:Ignorable="d"
+        d:DesignWidth="1120"
+        d:DesignHeight="720"
+        Width="1120"
+        Height="720"
+        MinWidth="900"
+        MinHeight="600"
         x:Class="LTFI.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/avalonia-logo.ico"
         Title="LTFI">
 
     <Design.DataContext>
-        <!-- This only sets the DataContext for the previewer in an IDE,
-             to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
-    <TextBlock Text="{Binding Greeting}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    <Border Background="#0A0D12">
+        <Grid ColumnDefinitions="220,*">
+            <Border Background="#11161F" Padding="18">
+                <StackPanel Spacing="18">
+                    <TextBlock Text="LTFI" FontSize="24" FontWeight="Bold"/>
+                    <TextBlock Text="Lock The F*** In" Opacity="0.68" TextWrapping="Wrap"/>
+                    <Border Background="#1F2633" CornerRadius="10" Padding="12">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Phase 1" FontWeight="SemiBold"/>
+                            <TextBlock Text="Main task flow in memory" Opacity="0.75" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
 
+            <views:TodayView Grid.Column="1" DataContext="{Binding Today}"/>
+        </Grid>
+    </Border>
 </Window>

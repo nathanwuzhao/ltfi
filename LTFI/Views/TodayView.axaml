@@ -1,0 +1,101 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:LTFI.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             x:Class="LTFI.Views.TodayView"
+             x:DataType="vm:TodayViewModel"
+             mc:Ignorable="d">
+    <Grid ColumnDefinitions="2*,3*" RowDefinitions="Auto,Auto,*" Margin="20">
+        <TextBlock Grid.ColumnSpan="2"
+                   Text="{Binding Header}"
+                   FontSize="28"
+                   FontWeight="SemiBold"/>
+
+        <Grid Grid.Row="1" Grid.ColumnSpan="2" ColumnDefinitions="*,Auto" Margin="0,18,0,18">
+            <TextBox PlaceholderText="Add a task title"
+                     Text="{Binding NewTaskTitle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+            <Button Grid.Column="1"
+                    Margin="12,0,0,0"
+                    Padding="18,10"
+                    Content="Add Task"
+                    Command="{Binding AddTaskCommand}"/>
+        </Grid>
+
+        <Border Grid.Row="2"
+                Background="#151A22"
+                CornerRadius="12"
+                Padding="12"
+                Margin="0,0,12,0">
+            <ListBox ItemsSource="{Binding Tasks}"
+                     SelectedItem="{Binding SelectedTask, Mode=TwoWay}">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:TaskItemViewModel">
+                        <Border Padding="12" Margin="0,0,0,8" CornerRadius="8" Background="#222938">
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold"/>
+                                <TextBlock Text="{Binding ProgressText}" Opacity="0.82"/>
+                                <TextBlock Text="{Binding Priority}" Opacity="0.65"/>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+
+        <Border Grid.Row="2"
+                Grid.Column="1"
+                Background="#0F141B"
+                CornerRadius="12"
+                Padding="18">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
+                <TextBlock Text="{Binding SelectedTask.Title, FallbackValue='Select a task'}"
+                           FontSize="24"
+                           FontWeight="SemiBold"/>
+
+                <TextBlock Grid.Row="1"
+                           Margin="0,12,0,0"
+                           Text="{Binding SelectedTask.Description, FallbackValue='Select a task to see details.'}"
+                           TextWrapping="Wrap"/>
+
+                <Grid Grid.Row="2" ColumnDefinitions="*,*" Margin="0,18,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Priority" Opacity="0.65"/>
+                        <TextBlock Text="{Binding SelectedTask.Priority, FallbackValue='-'}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="Status" Opacity="0.65"/>
+                        <TextBlock Text="{Binding SelectedTask.StatusText, FallbackValue='-'}"/>
+                    </StackPanel>
+                </Grid>
+
+                <Grid Grid.Row="3" ColumnDefinitions="*,*" Margin="0,18,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Due" Opacity="0.65"/>
+                        <TextBlock Text="{Binding SelectedTask.DueDateText, FallbackValue='-'}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="Points" Opacity="0.65"/>
+                        <TextBlock Text="{Binding SelectedTask.PointsValue, FallbackValue='0'}"/>
+                    </StackPanel>
+                </Grid>
+
+                <StackPanel Grid.Row="4" Margin="0,18,0,0" Spacing="8">
+                    <TextBlock Text="Progress" Opacity="0.65"/>
+                    <TextBlock Text="{Binding SelectedTask.ProgressText, FallbackValue='-'}" FontSize="18"/>
+                </StackPanel>
+
+                <Grid Grid.Row="5" ColumnDefinitions="Auto,Auto,*" Margin="0,18,0,0">
+                    <Button Padding="16,10"
+                            Content="Complete"
+                            Command="{Binding CompleteSelectedTaskCommand}"/>
+                    <Button Grid.Column="1"
+                            Margin="10,0,0,0"
+                            Padding="16,10"
+                            Content="Delete"
+                            Command="{Binding DeleteSelectedTaskCommand}"/>
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

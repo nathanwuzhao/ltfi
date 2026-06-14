@@ -1,6 +1,13 @@
-﻿namespace LTFI.ViewModels;
+using LTFI.Services;
 
-public partial class MainWindowViewModel : ViewModelBase
+namespace LTFI.ViewModels;
+
+public class MainWindowViewModel : ViewModelBase
 {
-    public string Greeting { get; } = "Welcome to Avalonia!";
+    public MainWindowViewModel()
+    {
+        Today = new TodayViewModel(new TaskService());
+    }
+
+    public TodayViewModel Today { get; }
 }
