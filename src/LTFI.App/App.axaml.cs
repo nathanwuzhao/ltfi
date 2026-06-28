@@ -6,6 +6,7 @@ using Avalonia.Markup.Xaml;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
+using LTFI.Core.Abstractions;
 using LTFI.Infrastructure;
 using LTFI.Infrastructure.Persistence;
 using LTFI.ViewModels;
@@ -30,6 +31,12 @@ public partial class App : Application
         {
             _services = BuildServiceProvider();
             _services.MigrateLtfiDatabase();
+
+            // Any focus session left running by a previous run can't be trusted; close it out.
+            _services.GetRequiredService<IFocusSessionService>()
+                .AbandonDanglingSessionsAsync()
+                .GetAwaiter().GetResult();
+
             Log.Information("LTFI started; database ready at {Path}", DbPaths.DatabaseFilePath);
         }
         catch (Exception ex)
@@ -76,6 +83,7 @@ public partial class App : Application
         services.AddSingleton<TodayViewModel>();
         services.AddSingleton<ProjectsViewModel>();
         services.AddSingleton<TasksViewModel>();
+        services.AddSingleton<FocusViewModel>();
         services.AddSingleton<MainWindowViewModel>();
 
         return services.BuildServiceProvider();

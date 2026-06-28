@@ -20,20 +20,30 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private ViewModelBase? currentViewModel;
 
-    public MainWindowViewModel(TodayViewModel today, ProjectsViewModel projects, TasksViewModel tasks)
+    private readonly NavItem _focusNav;
+
+    public MainWindowViewModel(
+        TodayViewModel today,
+        ProjectsViewModel projects,
+        TasksViewModel tasks,
+        FocusViewModel focus)
     {
+        _focusNav = new NavItem("Focus", focus);
+
         NavItems =
         [
             new NavItem("Today", today),
             new NavItem("Projects", projects),
             new NavItem("Tasks", tasks),
-            new NavItem("Focus", new PlaceholderViewModel(
-                "Focus", "Focus sessions and the work timer arrive in Phase 2.")),
+            _focusNav,
             new NavItem("Review", new PlaceholderViewModel(
                 "Review", "Daily and weekly review loops arrive in Phase 3.")),
             new NavItem("Settings", new PlaceholderViewModel(
                 "Settings", "Settings and optional integrations arrive in later phases.")),
         ];
+
+        // Quick-start from the Today page jumps to the Focus page.
+        today.StartFocusRequested += (_, _) => SelectedNav = _focusNav;
 
         SelectedNav = NavItems[0];
     }

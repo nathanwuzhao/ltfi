@@ -40,4 +40,10 @@ public class TaskItem
     public DateTimeOffset? CompletedAt { get; set; }
 
     public ICollection<SubtaskItem> Subtasks { get; set; } = new List<SubtaskItem>();
+
+    /// <summary>
+    /// Total focused time on this task, summed from its completed <see cref="FocusSession"/>s
+    /// (not stored as a column — the read services populate it). Zero when none.
+    /// </summary>
+    public TimeSpan TimeSpent { get; set; }
 }

@@ -29,7 +29,12 @@
                             <Grid ColumnDefinitions="*,Auto" Margin="2">
                                 <StackPanel Spacing="3">
                                     <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
-                                    <TextBlock Classes="muted" FontSize="12" Text="{Binding Priority}"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Classes="muted" FontSize="12" Text="{Binding Priority}"/>
+                                        <TextBlock Classes="muted" FontSize="12" Text="·"/>
+                                        <TextBlock Classes="muted" FontSize="12"
+                                                   Text="{Binding TimeSpent, Converter={StaticResource DurationToClock}}"/>
+                                    </StackPanel>
                                 </StackPanel>
                                 <Border Grid.Column="1" Classes="chip">
                                     <TextBlock Text="{Binding Status}"/>
@@ -90,6 +95,13 @@
                         <TextBlock Classes="section-header" Text="DUE DATE"/>
                         <TextBox Text="{Binding DraftDueDateText, Mode=TwoWay}"
                                  PlaceholderText="YYYY-MM-DD"/>
+                    </StackPanel>
+
+                    <!-- Total focused time on this task, summed from completed focus sessions. -->
+                    <StackPanel Spacing="6" IsVisible="{Binding !IsCreatingNew}">
+                        <TextBlock Classes="section-header" Text="TIME SPENT"/>
+                        <TextBlock FontSize="18"
+                                   Text="{Binding SelectedTask.TimeSpent, Converter={StaticResource DurationToClock}}"/>
                     </StackPanel>
 
                     <TextBlock Foreground="{DynamicResource WarningBrush}"

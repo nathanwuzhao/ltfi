@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="LTFI.App"
              xmlns:local="using:LTFI"
+             xmlns:conv="using:LTFI.Converters"
              RequestedThemeVariant="Dark">
 
     <Application.DataTemplates>
@@ -9,6 +10,7 @@
     </Application.DataTemplates>
 
     <Application.Resources>
+        <conv:DurationToClockConverter x:Key="DurationToClock"/>
         <!-- Command-center dark palette (plan §1.6). Muted backgrounds, thin borders, clear status colours. -->
         <SolidColorBrush x:Key="BgWindowBrush" Color="#0A0D12"/>
         <SolidColorBrush x:Key="BgPanelBrush" Color="#11161F"/>

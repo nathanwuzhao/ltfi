@@ -46,6 +46,9 @@ public class LtfiDbContext(DbContextOptions<LtfiDbContext> options) : DbContext(
                 .WithOne(s => s.TaskItem)
                 .HasForeignKey(s => s.TaskItemId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Summed from completed focus sessions at read time, not stored.
+            e.Ignore(t => t.TimeSpent);
         });
 
         modelBuilder.Entity<SubtaskItem>(e =>
@@ -66,7 +69,11 @@ public class LtfiDbContext(DbContextOptions<LtfiDbContext> options) : DbContext(
 
         modelBuilder.Entity<TaskLabel>(e => e.Property(l => l.Name).IsRequired());
 
-        modelBuilder.Entity<FocusSession>(e => e.Property(f => f.Status).HasConversion<string>());
+        modelBuilder.Entity<FocusSession>(e =>
+        {
+            e.Property(f => f.Status).HasConversion<string>();
+            e.Property(f => f.Result).HasConversion<string>();
+        });
 
         modelBuilder.Entity<EvidenceItem>(e =>
         {

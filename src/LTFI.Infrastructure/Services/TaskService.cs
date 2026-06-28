@@ -24,6 +24,8 @@ public sealed class TaskService(IDbContextFactory<LtfiDbContext> contextFactory)
             .Include(t => t.Subtasks)
             .ToListAsync(cancellationToken);
 
+        await PopulateTimeSpentAsync(db, tasks, cancellationToken);
+
         return tasks
             .OrderByDescending(t => t.CreatedAt)
             .ToList();
@@ -43,21 +45,31 @@ public sealed class TaskService(IDbContextFactory<LtfiDbContext> contextFactory)
             .Where(t => t.DueAt != null)
             .ToListAsync(cancellationToken);
 
-        return dated
+        var today = dated
             .Where(t => t.DueAt < endOfToday
                         && t.Status != TaskStatus.Completed
                         && t.Status != TaskStatus.Canceled)
             .OrderBy(t => t.DueAt)
             .ToList();
+
+        await PopulateTimeSpentAsync(db, today, cancellationToken);
+        return today;
     }
 
     public async Task<TaskItem?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         await using var db = await _contextFactory.CreateDbContextAsync(cancellationToken);
-        return await db.Tasks
+        var task = await db.Tasks
             .AsNoTracking()
             .Include(t => t.Subtasks)
             .FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+
+        if (task is not null)
+        {
+            await PopulateTimeSpentAsync(db, [task], cancellationToken);
+        }
+
+        return task;
     }
 
     public async Task<TaskItem> CreateAsync(TaskDraft draft, CancellationToken cancellationToken = default)
@@ -92,6 +104,8 @@ public sealed class TaskService(IDbContextFactory<LtfiDbContext> contextFactory)
         var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == id, cancellationToken)
             ?? throw new InvalidOperationException("Task could not be found.");
 
+        var wasCompleted = task.Status == TaskStatus.Completed;
+
         task.ProjectId = draft.ProjectId;
         task.Title = draft.Title.Trim();
         task.Description = Normalize(draft.Description);
@@ -100,6 +114,7 @@ public sealed class TaskService(IDbContextFactory<LtfiDbContext> contextFactory)
         ApplyStatus(task, draft.Status);
         task.UpdatedAt = DateTimeOffset.Now;
 
+        RecordCompletionEvidence(db, task, wasCompleted);
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -109,8 +124,12 @@ public sealed class TaskService(IDbContextFactory<LtfiDbContext> contextFactory)
         var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == id, cancellationToken)
             ?? throw new InvalidOperationException("Task could not be found.");
 
+        var wasCompleted = task.Status == TaskStatus.Completed;
+
         ApplyStatus(task, status);
         task.UpdatedAt = DateTimeOffset.Now;
+
+        RecordCompletionEvidence(db, task, wasCompleted);
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -163,11 +182,28 @@ public sealed class TaskService(IDbContextFactory<LtfiDbContext> contextFactory)
     public async Task SetSubtaskCompletedAsync(Guid subtaskId, bool isCompleted, CancellationToken cancellationToken = default)
     {
         await using var db = await _contextFactory.CreateDbContextAsync(cancellationToken);
-        var subtask = await db.Subtasks.FirstOrDefaultAsync(s => s.Id == subtaskId, cancellationToken)
+        var subtask = await db.Subtasks
+            .Include(s => s.TaskItem)
+            .FirstOrDefaultAsync(s => s.Id == subtaskId, cancellationToken)
             ?? throw new InvalidOperationException("Subtask could not be found.");
 
+        var wasCompleted = subtask.IsCompleted;
         subtask.IsCompleted = isCompleted;
         subtask.UpdatedAt = DateTimeOffset.Now;
+
+        if (isCompleted && !wasCompleted)
+        {
+            db.Evidence.Add(new EvidenceItem
+            {
+                Type = EvidenceType.SubtaskCompleted,
+                Source = "subtask",
+                Title = subtask.Title,
+                ProjectId = subtask.TaskItem?.ProjectId,
+                TaskId = subtask.TaskItemId,
+                OccurredAt = DateTimeOffset.Now
+            });
+        }
+
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -184,12 +220,58 @@ public sealed class TaskService(IDbContextFactory<LtfiDbContext> contextFactory)
         await db.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>Sums each task's completed focus-session durations into <see cref="TaskItem.TimeSpent"/>.</summary>
+    private static async Task PopulateTimeSpentAsync(
+        LtfiDbContext db,
+        IReadOnlyCollection<TaskItem> tasks,
+        CancellationToken cancellationToken)
+    {
+        if (tasks.Count == 0)
+        {
+            return;
+        }
+
+        // Status is filtered in memory to avoid SQLite's string-enum translation limits.
+        var sessions = await db.FocusSessions
+            .AsNoTracking()
+            .Where(s => s.TaskId != null)
+            .Select(s => new { s.TaskId, s.Status, s.Duration })
+            .ToListAsync(cancellationToken);
+
+        var totals = sessions
+            .Where(s => s.Status == FocusSessionStatus.Completed && s.Duration != null)
+            .GroupBy(s => s.TaskId!.Value)
+            .ToDictionary(g => g.Key, g => g.Aggregate(TimeSpan.Zero, (sum, s) => sum + s.Duration!.Value));
+
+        foreach (var task in tasks)
+        {
+            task.TimeSpent = totals.TryGetValue(task.Id, out var total) ? total : TimeSpan.Zero;
+        }
+    }
+
     private static void ApplyStatus(TaskItem task, TaskStatus status)
     {
         task.Status = status;
         task.CompletedAt = status == TaskStatus.Completed
             ? task.CompletedAt ?? DateTimeOffset.Now
             : null;
+    }
+
+    /// <summary>Writes a TaskCompleted evidence record when a task first transitions to Completed.</summary>
+    private static void RecordCompletionEvidence(LtfiDbContext db, TaskItem task, bool wasCompleted)
+    {
+        if (task.Status == TaskStatus.Completed && !wasCompleted)
+        {
+            db.Evidence.Add(new EvidenceItem
+            {
+                Type = EvidenceType.TaskCompleted,
+                Source = "task",
+                Title = task.Title,
+                ProjectId = task.ProjectId,
+                TaskId = task.Id,
+                OccurredAt = DateTimeOffset.Now
+            });
+        }
     }
 
     private static void ValidateDraft(TaskDraft draft)

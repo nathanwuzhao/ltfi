@@ -1,0 +1,121 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:LTFI.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             x:Class="LTFI.Views.FocusView"
+             x:DataType="vm:FocusViewModel"
+             mc:Ignorable="d">
+
+    <Grid RowDefinitions="Auto,*" Margin="28">
+        <TextBlock Classes="page-title" Text="{Binding Header}"/>
+
+        <Border Grid.Row="1" Classes="card" Margin="0,18,0,0"
+                MaxWidth="560" HorizontalAlignment="Center" VerticalAlignment="Top">
+            <StackPanel Spacing="16">
+
+                <!-- Setup: choose what to work on -->
+                <StackPanel Spacing="14" IsVisible="{Binding ShowSetup}">
+                    <TextBlock Classes="section-header" Text="START A FOCUS SESSION"/>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="muted" Text="Project"/>
+                        <ComboBox HorizontalAlignment="Stretch"
+                                  ItemsSource="{Binding ProjectOptions}"
+                                  SelectedItem="{Binding SelectedProjectOption, Mode=TwoWay}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ProjectOption">
+                                    <TextBlock Text="{Binding Name}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="muted" Text="Task"/>
+                        <ComboBox HorizontalAlignment="Stretch"
+                                  ItemsSource="{Binding TaskOptions}"
+                                  SelectedItem="{Binding SelectedTaskOption, Mode=TwoWay}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:TaskOption">
+                                    <TextBlock Text="{Binding Title}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="muted" Text="Intent"/>
+                        <TextBox Text="{Binding IntentText, Mode=TwoWay}"
+                                 PlaceholderText="What will you get done this session?"/>
+                    </StackPanel>
+
+                    <Button Classes="primary" Content="Start session" Command="{Binding StartCommand}"/>
+                </StackPanel>
+
+                <!-- Active: the running timer -->
+                <StackPanel Spacing="16" IsVisible="{Binding ShowActive}">
+                    <TextBlock Classes="section-header" Text="CURRENT OPERATION"/>
+                    <TextBlock Text="{Binding CurrentObjective}" FontSize="16" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding ElapsedText}"
+                               FontSize="56" FontWeight="SemiBold"
+                               HorizontalAlignment="Center"
+                               Foreground="{DynamicResource AccentBrush}"/>
+                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
+                        <Button Content="{Binding PauseResumeText}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center"
+                                Command="{Binding PauseResumeCommand}"/>
+                        <Button Grid.Column="1" Classes="primary"
+                                Content="Finish"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center"
+                                Command="{Binding BeginFinishCommand}"/>
+                        <Button Grid.Column="2" Classes="danger"
+                                Content="Abandon"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center"
+                                Command="{Binding AbandonCommand}"/>
+                    </Grid>
+                </StackPanel>
+
+                <!-- Review: end-of-session capture -->
+                <StackPanel Spacing="14" IsVisible="{Binding ShowReview}">
+                    <TextBlock Classes="section-header" Text="SESSION REVIEW"/>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="muted" Text="What happened?"/>
+                        <ComboBox HorizontalAlignment="Stretch"
+                                  ItemsSource="{Binding Results}"
+                                  SelectedItem="{Binding SelectedResult, Mode=TwoWay}"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="muted" Text="What changed?"/>
+                        <TextBox Text="{Binding ReviewSummary, Mode=TwoWay}"
+                                 AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="muted" Text="Blocker (if any)"/>
+                        <TextBox Text="{Binding ReviewBlocker, Mode=TwoWay}"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="muted" Text="Next concrete action"/>
+                        <TextBox Text="{Binding ReviewNext, Mode=TwoWay}"/>
+                    </StackPanel>
+
+                    <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="10">
+                        <Button Classes="primary" Content="Save session" Command="{Binding ConfirmFinishCommand}"/>
+                        <Button Grid.Column="1" Content="Back" Command="{Binding CancelFinishCommand}"/>
+                    </Grid>
+                </StackPanel>
+
+                <TextBlock Foreground="{DynamicResource WarningBrush}"
+                           TextWrapping="Wrap"
+                           Text="{Binding FeedbackMessage}"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

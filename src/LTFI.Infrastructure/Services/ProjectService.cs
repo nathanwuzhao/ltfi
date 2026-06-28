@@ -20,6 +20,7 @@ public sealed class ProjectService(IDbContextFactory<LtfiDbContext> contextFacto
         await using var db = await _contextFactory.CreateDbContextAsync(cancellationToken);
         return await db.Projects
             .AsNoTracking()
+            .AsSplitQuery()
             .Include(p => p.Tasks)
             .ThenInclude(t => t.Subtasks)
             .OrderBy(p => p.Title)
@@ -31,6 +32,7 @@ public sealed class ProjectService(IDbContextFactory<LtfiDbContext> contextFacto
         await using var db = await _contextFactory.CreateDbContextAsync(cancellationToken);
         return await db.Projects
             .AsNoTracking()
+            .AsSplitQuery()
             .Include(p => p.Tasks)
             .ThenInclude(t => t.Subtasks)
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);

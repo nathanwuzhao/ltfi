@@ -24,6 +24,9 @@ public class FocusSession
 
     public FocusSessionStatus Status { get; set; } = FocusSessionStatus.Active;
 
+    /// <summary>The review outcome recorded at finish (plan §2.3); null while running or if abandoned.</summary>
+    public FocusSessionResult? Result { get; set; }
+
     public string? ResultSummary { get; set; }
 
     public string? BlockerSummary { get; set; }

@@ -42,13 +42,21 @@ public enum MilestoneStatus
     Abandoned
 }
 
-/// <summary>Focus session states (plan §2.2). Used from Phase 2 onward; persisted now.</summary>
+/// <summary>Focus session lifecycle states (plan §2.2).</summary>
 public enum FocusSessionStatus
 {
     Active,
     Paused,
     Completed,
     Abandoned
+}
+
+/// <summary>The outcome a user records when finishing a focus session (plan §2.3 review).</summary>
+public enum FocusSessionResult
+{
+    Completed,
+    Partial,
+    Blocked
 }
 
 /// <summary>Evidence item types (plan §4.4). Only manual/task/subtask/focus are produced early.</summary>

@@ -185,4 +185,145 @@ public class ServiceTests
         }
         finally { Cleanup(path); }
     }
+
+    [Fact]
+    public async Task Focus_session_runs_marks_task_in_progress_and_records_evidence()
+    {
+        var path = await NewMigratedDbAsync();
+        try
+        {
+            var factory = new TestDbFactory(path);
+            var tasks = new TaskService(factory);
+            var focus = new FocusSessionService(factory);
+
+            var task = await tasks.CreateAsync(new TaskDraft { Title = "Write report" });
+
+            Assert.False(focus.HasActiveSession);
+            await focus.StartAsync(null, task.Id, "draft the intro");
+            Assert.True(focus.HasActiveSession);
+
+            // Starting a session moves a Ready task to InProgress.
+            Assert.Equal(TaskStatus.InProgress, (await tasks.GetByIdAsync(task.Id))!.Status);
+
+            await focus.PauseAsync();
+            await focus.ResumeAsync();
+            await focus.FinishAsync(FocusSessionResult.Completed, "intro drafted", null, "write body");
+
+            Assert.False(focus.HasActiveSession);
+
+            await using var db = factory.CreateDbContext();
+            var session = db.FocusSessions.Single();
+            Assert.Equal(FocusSessionStatus.Completed, session.Status);
+            Assert.Equal(FocusSessionResult.Completed, session.Result);
+            Assert.NotNull(session.EndedAt);
+            Assert.Single(db.Evidence.Where(e => e.Type == EvidenceType.FocusSessionCompleted).ToList());
+        }
+        finally { Cleanup(path); }
+    }
+
+    [Fact]
+    public async Task Abandoned_focus_session_records_no_completion_evidence()
+    {
+        var path = await NewMigratedDbAsync();
+        try
+        {
+            var factory = new TestDbFactory(path);
+            var focus = new FocusSessionService(factory);
+
+            await focus.StartAsync(null, null, "explore");
+            await focus.AbandonAsync();
+
+            Assert.False(focus.HasActiveSession);
+            await using var db = factory.CreateDbContext();
+            Assert.Equal(FocusSessionStatus.Abandoned, db.FocusSessions.Single().Status);
+            Assert.Empty(db.Evidence.ToList());
+        }
+        finally { Cleanup(path); }
+    }
+
+    [Fact]
+    public async Task Completing_tasks_and_subtasks_records_evidence_once()
+    {
+        var path = await NewMigratedDbAsync();
+        try
+        {
+            var factory = new TestDbFactory(path);
+            var tasks = new TaskService(factory);
+
+            var task = await tasks.CreateAsync(new TaskDraft { Title = "Ship it" });
+            var subtask = await tasks.AddSubtaskAsync(task.Id, "step");
+
+            await tasks.SetStatusAsync(task.Id, TaskStatus.Completed);
+            await tasks.SetStatusAsync(task.Id, TaskStatus.Completed); // idempotent — no double evidence
+            await tasks.SetSubtaskCompletedAsync(subtask.Id, true);
+            await tasks.SetSubtaskCompletedAsync(subtask.Id, true); // idempotent
+
+            await using var db = factory.CreateDbContext();
+            Assert.Single(db.Evidence.Where(e => e.Type == EvidenceType.TaskCompleted).ToList());
+            Assert.Single(db.Evidence.Where(e => e.Type == EvidenceType.SubtaskCompleted).ToList());
+        }
+        finally { Cleanup(path); }
+    }
+
+    [Fact]
+    public async Task Today_snapshot_sums_points_and_counts_focus_streak()
+    {
+        var path = await NewMigratedDbAsync();
+        try
+        {
+            var factory = new TestDbFactory(path);
+            var tasks = new TaskService(factory);
+            var focus = new FocusSessionService(factory);
+            var insights = new InsightsService(factory);
+
+            var task = await tasks.CreateAsync(new TaskDraft { Title = "t" });
+            await tasks.SetStatusAsync(task.Id, TaskStatus.Completed);   // +10
+            await focus.StartAsync(null, null, "work");
+            await focus.FinishAsync(FocusSessionResult.Completed, null, null, null); // +5
+
+            var snapshot = await insights.GetTodaySnapshotAsync();
+            Assert.Equal(15, snapshot.PointsToday);
+            Assert.Equal(1, snapshot.FocusStreakDays);
+        }
+        finally { Cleanup(path); }
+    }
+
+    [Fact]
+    public async Task Task_time_spent_sums_its_completed_focus_sessions_only()
+    {
+        var path = await NewMigratedDbAsync();
+        try
+        {
+            var factory = new TestDbFactory(path);
+            var tasks = new TaskService(factory);
+            var focus = new FocusSessionService(factory);
+
+            var task = await tasks.CreateAsync(new TaskDraft { Title = "Study math" });
+            var other = await tasks.CreateAsync(new TaskDraft { Title = "Other" });
+
+            // Two completed sessions on the task, one abandoned, plus one on a different task.
+            await focus.StartAsync(null, task.Id, "s1");
+            await focus.FinishAsync(FocusSessionResult.Completed, null, null, null);
+            await focus.StartAsync(null, task.Id, "s2");
+            await focus.FinishAsync(FocusSessionResult.Partial, null, null, null);
+            await focus.StartAsync(null, task.Id, "abandoned");
+            await focus.AbandonAsync();
+            await focus.StartAsync(null, other.Id, "elsewhere");
+            await focus.FinishAsync(FocusSessionResult.Completed, null, null, null);
+
+            // Expected = sum of the task's *completed* session durations, read straight from the DB.
+            await using var db = factory.CreateDbContext();
+            var expected = db.FocusSessions
+                .Where(s => s.TaskId == task.Id && s.Status == FocusSessionStatus.Completed)
+                .ToList()
+                .Aggregate(TimeSpan.Zero, (sum, s) => sum + (s.Duration ?? TimeSpan.Zero));
+
+            var loaded = await tasks.GetByIdAsync(task.Id);
+            Assert.Equal(expected, loaded!.TimeSpent);
+
+            // Two completed sessions contributed; the abandoned one did not.
+            Assert.Equal(2, db.FocusSessions.Count(s => s.TaskId == task.Id && s.Status == FocusSessionStatus.Completed));
+        }
+        finally { Cleanup(path); }
+    }
 }

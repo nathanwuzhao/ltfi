@@ -20,6 +20,9 @@ public static class DependencyInjection
 
         services.AddSingleton<IProjectService, ProjectService>();
         services.AddSingleton<ITaskService, TaskService>();
+        // Holds the live focus timer in memory, so it must be a singleton.
+        services.AddSingleton<IFocusSessionService, FocusSessionService>();
+        services.AddSingleton<IInsightsService, InsightsService>();
 
         return services;
     }

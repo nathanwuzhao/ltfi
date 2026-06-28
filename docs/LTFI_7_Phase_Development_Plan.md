@@ -388,39 +388,67 @@ Build the core productivity loop: define work, start work, complete work, and sa
 - Completion creates evidence records.
 - Points/streaks can be introduced in a simple, non-punitive way.
 
+## Reconciliation with Phase 1 (as built)
+
+Phase 1 shipped more of this than originally assumed, and made a few simplifications that
+change how Phase 2 should be built. Carry these forward:
+
+- **Task statuses are trimmed to five:** `Ready, InProgress, Completed, Canceled, Deferred`
+  (no Inbox/Planned/Blocked). "Start work" = move a task to `InProgress`; starting a focus
+  session against a task should do this automatically.
+- **The `FocusSession`, `EvidenceItem`, `TaskLabel`, and `Milestone` entities already exist**
+  and are persisted (Phase 1, §1.3). Phase 2 builds their services/UI, not the schema.
+- **Project progress is derived, not stored** (`ProjectProgress.Calculate` over task/subtask
+  completion). So completing tasks/subtasks/sessions advances the project % automatically —
+  no separate progress write is needed.
+- **Points have no separate ledger.** Derive points from `EvidenceItem` (each evidence type
+  maps to a point value). This keeps "evidence over vibes" literal and avoids a `PointEvent`
+  table the data model never defined.
+- **The earlier per-task required-work-time/“complete after N minutes” model was removed.**
+  Active-time tracking lives entirely in `FocusSession` now.
+- **CRUD for tasks/subtasks and a basic Today view already exist.** Phase 2 enriches them
+  rather than starting from scratch.
+
 ## Tasks
 
 ### 2.1 Task planning workflows
 
-Implement views and view models for:
+Largely delivered in Phase 1 (task list, task detail/edit, subtask management, priority,
+status, due date, project assignment). Remaining for Phase 2:
 
-- Project detail page
-- Task list page
-- Task detail/edit page
-- Subtask management
-- Label assignment
-- Priority assignment
-- Due date assignment
+- Project detail page (tasks + derived progress + milestones placeholder)
+- Label assignment UI (entity exists; wiring deferred until it earns its place)
 
-Suggested task fields:
+Task fields as implemented:
 
 ```csharp
 Guid Id
 Guid? ProjectId
+Guid? MilestoneId
 string Title
 string? Description
-TaskStatus Status
+TaskStatus Status          // Ready | InProgress | Completed | Canceled | Deferred
 TaskPriority Priority
 DateTimeOffset? DueAt
 DateTimeOffset? ScheduledStartAt
 TimeSpan? EstimatedDuration
 DateTimeOffset CreatedAt
 DateTimeOffset UpdatedAt
+DateTimeOffset? CompletedAt
 ```
 
 ### 2.2 Focus session model
 
-`FocusSession` should capture:
+The `FocusSession` entity already exists from Phase 1 with the fields below (plus `NextAction`).
+Two clarifications for Phase 2:
+
+- **`Status` is the lifecycle** (`Active | Paused | Completed | Abandoned`). The end-of-session
+  review outcome (Completed / Partial / Blocked) is a *separate* concern — add a small
+  `FocusSessionResult` enum + nullable `Result` field rather than overloading `Status`.
+- **`Duration` is persisted on pause and finish** so the session record is durable, but the
+  authoritative live timer is held in memory by a singleton focus service while the app runs
+  (see §2.3). Cross-restart recovery of a running session is a Phase 7 concern; on startup,
+  any session left `Active`/`Paused` from a previous run is marked `Abandoned`.
 
 ```csharp
 Guid Id
@@ -430,9 +458,11 @@ string? Intent
 DateTimeOffset StartedAt
 DateTimeOffset? EndedAt
 TimeSpan? Duration
-FocusSessionStatus Status
+FocusSessionStatus Status        // lifecycle
+FocusSessionResult? Result       // review outcome (Completed | Partial | Blocked)
 string? ResultSummary
 string? BlockerSummary
+string? NextAction
 ```
 
 ### 2.3 Focus page
@@ -466,15 +496,17 @@ What is the next concrete action?
 
 Add simple points only after focus sessions and task completion are stable.
 
-Suggested initial scoring:
+Points are **derived from `EvidenceItem`** (no separate ledger): each completion writes an
+evidence record, and a points calculator maps evidence type → value:
 
-- Complete task: +10
-- Complete subtask: +2
-- Complete focus session: +5
-- Finish daily review: +10
+- Complete task (`TaskCompleted`): +10
+- Complete subtask (`SubtaskCompleted`): +2
+- Complete focus session (`FocusSessionCompleted`): +5
+- Finish daily review (`ReflectionSubmitted`): +10
 - No heavy penalties in Phase 2
 
-Streaks should be factual, not moralizing.
+Streaks should be factual, not moralizing — computed from evidence dates (e.g. a focus streak
+= consecutive days with at least one completed focus session).
 
 Examples:
 
@@ -486,13 +518,13 @@ LTFI focus streak: 3 days
 
 ### 2.5 Today page
 
-Create a useful Today view:
+Enrich the basic Today view from Phase 1 into a useful daily cockpit:
 
-- Current active task/session
-- Tasks scheduled for today
-- Due soon
-- Active projects
-- Quick start focus button
+- Current active focus session (intent, task, elapsed, running/paused)
+- Tasks due today / overdue (already present)
+- Active projects count (already present)
+- Points earned today + current focus streak
+- Quick-start focus button (jumps to the Focus page)
 - Daily review prompt placeholder
 
 ## Acceptance criteria

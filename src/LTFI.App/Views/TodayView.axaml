@@ -8,11 +8,39 @@
              x:DataType="vm:TodayViewModel"
              mc:Ignorable="d">
 
-    <Grid RowDefinitions="Auto,Auto,*" Margin="28">
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*" Margin="28">
         <TextBlock Classes="page-title" Text="{Binding Header}"/>
-        <TextBlock Grid.Row="1" Classes="muted" Margin="0,6,0,18" Text="{Binding SummaryText}"/>
+        <TextBlock Grid.Row="1" Classes="muted" Margin="0,6,0,14" Text="{Binding SummaryText}"/>
 
-        <Border Grid.Row="2" Classes="card" Padding="8">
+        <!-- Stat strip: quick-start + points + streak -->
+        <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto,*" Margin="0,0,0,12">
+            <Button Classes="primary" Content="Start focus" Command="{Binding StartFocusCommand}"/>
+            <Border Grid.Column="1" Classes="chip" Margin="10,0,0,0">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <TextBlock Text="Points today:"/>
+                    <TextBlock Text="{Binding PointsToday}"/>
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="2" Classes="chip" Margin="8,0,0,0">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <TextBlock Text="Focus streak:"/>
+                    <TextBlock Text="{Binding FocusStreakDays}"/>
+                    <TextBlock Text="d"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Active focus session banner -->
+        <Border Grid.Row="3" Classes="card" Margin="0,0,0,12"
+                Padding="14,10"
+                IsVisible="{Binding HasActiveSession}">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <TextBlock Classes="section-header" Text="IN FOCUS" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding ActiveSessionText}" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <Border Grid.Row="4" Classes="card" Padding="8">
             <Panel>
                 <TextBlock Classes="muted"
                            Margin="12"
