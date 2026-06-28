@@ -27,7 +27,8 @@ public partial class MainWindowViewModel : ViewModelBase
         TodayViewModel today,
         ProjectsViewModel projects,
         TasksViewModel tasks,
-        FocusViewModel focus)
+        FocusViewModel focus,
+        ReviewViewModel review)
     {
         _focus = focus;
         _focusNav = new NavItem("Focus", focus);
@@ -38,8 +39,7 @@ public partial class MainWindowViewModel : ViewModelBase
             new NavItem("Projects", projects),
             new NavItem("Tasks", tasks),
             _focusNav,
-            new NavItem("Review", new PlaceholderViewModel(
-                "Review", "Daily and weekly review loops arrive in Phase 3.")),
+            new NavItem("Review", review),
             new NavItem("Settings", new PlaceholderViewModel(
                 "Settings", "Settings and optional integrations arrive in later phases.")),
         ];

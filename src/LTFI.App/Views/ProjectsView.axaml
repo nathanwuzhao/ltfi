@@ -57,6 +57,34 @@
                 <StackPanel Spacing="14">
                     <TextBlock Classes="page-title" FontSize="20" Text="{Binding EditorTitle}"/>
 
+                    <!-- Active-project-limit decision -->
+                    <Border Classes="card"
+                            BorderBrush="{DynamicResource WarningBrush}"
+                            IsVisible="{Binding IsResolvingLimit}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Classes="section-header" Text="ACTIVE PROJECT LIMIT REACHED"/>
+                            <TextBlock Classes="muted" TextWrapping="Wrap"
+                                       Text="Pause or kill an active project to make room — or cancel."/>
+                            <ItemsControl ItemsSource="{Binding ActiveProjectsToResolve}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="domain:Project">
+                                        <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,3">
+                                            <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
+                                            <Button Grid.Column="1" Content="Pause" Margin="0,0,8,0"
+                                                    Command="{ReflectionBinding $parent[UserControl].DataContext.PauseToMakeRoomCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                            <Button Grid.Column="2" Classes="danger" Content="Kill"
+                                                    Command="{ReflectionBinding $parent[UserControl].DataContext.KillToMakeRoomCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Button Content="Cancel activation" HorizontalAlignment="Left"
+                                    Command="{Binding CancelActivationCommand}"/>
+                        </StackPanel>
+                    </Border>
+
                     <StackPanel Spacing="6">
                         <TextBlock Classes="section-header" Text="TITLE"/>
                         <TextBox Text="{Binding DraftTitle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
@@ -114,6 +142,41 @@
                                 Content="Delete"
                                 Command="{Binding DeleteProjectCommand}"/>
                     </Grid>
+
+                    <!-- Milestones (available once the project is saved) -->
+                    <Border BorderBrush="{DynamicResource BorderSubtleBrush}"
+                            BorderThickness="0,1,0,0"
+                            Padding="0,14,0,0"
+                            IsVisible="{Binding CanManageMilestones}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Classes="section-header" Text="MILESTONES"/>
+
+                            <ItemsControl ItemsSource="{Binding Milestones}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="domain:Milestone">
+                                        <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,2">
+                                            <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
+                                            <Border Grid.Column="1" Classes="chip" Margin="0,0,8,0">
+                                                <TextBlock Text="{Binding Status}"/>
+                                            </Border>
+                                            <Button Grid.Column="2" Content="Toggle done" Margin="0,0,6,0"
+                                                    Command="{ReflectionBinding $parent[UserControl].DataContext.ToggleMilestoneCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                            <Button Grid.Column="3" Classes="danger" Content="Remove"
+                                                    Command="{ReflectionBinding $parent[UserControl].DataContext.DeleteMilestoneCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                <TextBox Text="{Binding NewMilestoneTitle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                         PlaceholderText="Add a milestone…"/>
+                                <Button Grid.Column="1" Content="Add" Command="{Binding AddMilestoneCommand}"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </ScrollViewer>
         </Border>

@@ -13,6 +13,9 @@ public interface IProjectService
 
     Task<Project?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
+    /// <summary>Number of projects currently in the Active state.</summary>
+    Task<int> CountActiveAsync(CancellationToken cancellationToken = default);
+
     Task<Project> CreateAsync(ProjectDraft draft, CancellationToken cancellationToken = default);
 
     Task UpdateAsync(Guid id, ProjectDraft draft, CancellationToken cancellationToken = default);

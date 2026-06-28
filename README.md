@@ -6,10 +6,11 @@ evidence of progress. LTFI is not just a todo list: its goals are situational
 awareness, operational control, evidence-based progress tracking, anti-sprawl on
 projects, and regular review loops.
 
-> **Status:** Phases 1–2 complete. Dark command-center shell, local SQLite persistence,
+> **Status:** Phases 1–3 complete. Dark command-center shell, local SQLite persistence,
 > project/task/subtask CRUD, focus sessions with a live timer and end-of-session review,
-> evidence-on-completion, and a Today cockpit with points and a focus streak. Project
-> control, reviews, and integrations follow in later phases.
+> evidence-on-completion, a Today cockpit (points + focus streak), an active-project limit
+> with a pause/kill decision flow, milestones, and a weekly review with stalled-project
+> detection. Local knowledge/integrations and focus enforcement follow in later phases.
 
 **Stack:** C# / .NET 9 · Avalonia UI · MVVM (CommunityToolkit.Mvvm). Local-first by
 default; SQLite persistence and all integrations (Git/GitHub, Logseq, LLM, focus

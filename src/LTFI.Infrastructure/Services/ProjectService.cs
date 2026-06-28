@@ -27,6 +27,12 @@ public sealed class ProjectService(IDbContextFactory<LtfiDbContext> contextFacto
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<int> CountActiveAsync(CancellationToken cancellationToken = default)
+    {
+        await using var db = await _contextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Projects.CountAsync(p => p.Status == ProjectStatus.Active, cancellationToken);
+    }
+
     public async Task<Project?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         await using var db = await _contextFactory.CreateDbContextAsync(cancellationToken);
@@ -56,6 +62,11 @@ public sealed class ProjectService(IDbContextFactory<LtfiDbContext> contextFacto
         ApplyArchiveState(project);
 
         await using var db = await _contextFactory.CreateDbContextAsync(cancellationToken);
+        if (project.Status == ProjectStatus.Active)
+        {
+            await EnsureActiveLimitNotExceededAsync(db, Guid.Empty, cancellationToken);
+        }
+
         db.Projects.Add(project);
         await db.SaveChangesAsync(cancellationToken);
         return project;
@@ -75,6 +86,12 @@ public sealed class ProjectService(IDbContextFactory<LtfiDbContext> contextFacto
             throw new InvalidOperationException("This project was killed and can't be reactivated.");
         }
 
+        // Enforce the active-project limit on the transition into Active.
+        if (draft.Status == ProjectStatus.Active && project.Status != ProjectStatus.Active)
+        {
+            await EnsureActiveLimitNotExceededAsync(db, id, cancellationToken);
+        }
+
         project.Title = draft.Title.Trim();
         project.Description = Normalize(draft.Description);
         project.Status = draft.Status;
@@ -84,6 +101,18 @@ public sealed class ProjectService(IDbContextFactory<LtfiDbContext> contextFacto
         ApplyArchiveState(project);
 
         await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>Throws if activating would exceed the active-project limit (plan §3.2).</summary>
+    private static async Task EnsureActiveLimitNotExceededAsync(LtfiDbContext db, Guid excludeId, CancellationToken cancellationToken)
+    {
+        var activeCount = await db.Projects
+            .CountAsync(p => p.Status == ProjectStatus.Active && p.Id != excludeId, cancellationToken);
+
+        if (activeCount >= ProjectPolicy.MaxActiveProjects)
+        {
+            throw new ActiveProjectLimitException(ProjectPolicy.MaxActiveProjects);
+        }
     }
 
     /// <summary>Stamps ArchivedAt when a project becomes Completed/Killed, clears it otherwise.</summary>

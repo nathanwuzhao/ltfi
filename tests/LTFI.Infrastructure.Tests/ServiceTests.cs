@@ -387,4 +387,109 @@ public class ServiceTests
         }
         finally { Cleanup(path); }
     }
+
+    [Fact]
+    public async Task Active_project_limit_blocks_a_fifth_until_one_is_freed()
+    {
+        var path = await NewMigratedDbAsync();
+        try
+        {
+            var projects = new ProjectService(new TestDbFactory(path));
+
+            for (var i = 1; i <= ProjectPolicy.MaxActiveProjects; i++)
+            {
+                await projects.CreateAsync(new ProjectDraft { Title = $"P{i}", Status = ProjectStatus.Active });
+            }
+            Assert.Equal(ProjectPolicy.MaxActiveProjects, await projects.CountActiveAsync());
+
+            await Assert.ThrowsAsync<ActiveProjectLimitException>(
+                () => projects.CreateAsync(new ProjectDraft { Title = "OneTooMany", Status = ProjectStatus.Active }));
+
+            // Pause one, and there's room again.
+            var first = (await projects.GetAllAsync())[0];
+            await projects.UpdateAsync(first.Id, new ProjectDraft { Title = first.Title, Status = ProjectStatus.Paused });
+            var created = await projects.CreateAsync(new ProjectDraft { Title = "NowOk", Status = ProjectStatus.Active });
+            Assert.Equal(ProjectStatus.Active, created.Status);
+        }
+        finally { Cleanup(path); }
+    }
+
+    [Fact]
+    public async Task Milestones_can_be_created_listed_and_removed()
+    {
+        var path = await NewMigratedDbAsync();
+        try
+        {
+            var factory = new TestDbFactory(path);
+            var projects = new ProjectService(factory);
+            var milestones = new MilestoneService(factory);
+
+            var project = await projects.CreateAsync(new ProjectDraft { Title = "P" });
+            var first = await milestones.CreateAsync(project.Id, new MilestoneDraft { Title = "Design" });
+            await milestones.CreateAsync(project.Id, new MilestoneDraft { Title = "Build" });
+
+            var list = await milestones.GetByProjectAsync(project.Id);
+            Assert.Equal(2, list.Count);
+            Assert.Equal(new[] { 0, 1 }, list.Select(m => m.SortOrder));
+
+            await milestones.SetStatusAsync(first.Id, MilestoneStatus.Completed);
+            Assert.Equal(MilestoneStatus.Completed,
+                (await milestones.GetByProjectAsync(project.Id)).Single(m => m.Id == first.Id).Status);
+
+            await milestones.DeleteAsync(first.Id);
+            Assert.Single(await milestones.GetByProjectAsync(project.Id));
+        }
+        finally { Cleanup(path); }
+    }
+
+    [Fact]
+    public async Task Weekly_review_summarizes_the_week()
+    {
+        var path = await NewMigratedDbAsync();
+        try
+        {
+            var factory = new TestDbFactory(path);
+            var projects = new ProjectService(factory);
+            var tasks = new TaskService(factory);
+            var focus = new FocusSessionService(factory);
+            var review = new ReviewService(factory);
+
+            var project = await projects.CreateAsync(new ProjectDraft { Title = "P", Status = ProjectStatus.Active });
+            var task = await tasks.CreateAsync(new TaskDraft { Title = "t", ProjectId = project.Id });
+            await tasks.SetStatusAsync(task.Id, TaskStatus.Completed);
+            await focus.StartAsync(project.Id, null, "work");
+            await focus.FinishAsync(FocusSessionResult.Completed, null, null, null);
+
+            var r = await review.GetWeeklyReviewAsync();
+            Assert.Equal(1, r.ActiveProjectCount);
+            Assert.Equal(ProjectPolicy.MaxActiveProjects, r.MaxActiveProjects);
+            Assert.Equal(1, r.TasksCompletedThisWeek);
+            Assert.Equal(1, r.NewProjectsThisWeek);
+            Assert.Empty(r.StalledProjects);
+            Assert.Contains(r.ProjectActivity, l => l.Title == "P");
+        }
+        finally { Cleanup(path); }
+    }
+
+    [Fact]
+    public async Task Stalled_detection_flags_an_inactive_active_project()
+    {
+        var path = await NewMigratedDbAsync();
+        try
+        {
+            var factory = new TestDbFactory(path);
+
+            // Seed an active project whose only timestamp is well in the past.
+            var old = DateTimeOffset.Now.AddDays(-(ProjectPolicy.StaleAfterDays + 5));
+            await using (var db = factory.CreateDbContext())
+            {
+                db.Projects.Add(new Project { Title = "Stale", Status = ProjectStatus.Active, CreatedAt = old, UpdatedAt = old });
+                await db.SaveChangesAsync();
+            }
+
+            var r = await new ReviewService(factory).GetWeeklyReviewAsync();
+            Assert.Contains(r.StalledProjects, s => s.Title == "Stale");
+        }
+        finally { Cleanup(path); }
+    }
 }

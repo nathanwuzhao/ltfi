@@ -1,0 +1,98 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:LTFI.ViewModels"
+             xmlns:abs="using:LTFI.Core.Abstractions"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             x:Class="LTFI.Views.ReviewView"
+             x:DataType="vm:ReviewViewModel"
+             mc:Ignorable="d">
+
+    <ScrollViewer>
+        <StackPanel Margin="28" Spacing="16">
+            <TextBlock Classes="page-title" Text="{Binding Header}"/>
+            <TextBlock Classes="muted" Text="The last 7 days, from your local data."/>
+
+            <!-- Summary stat row -->
+            <WrapPanel>
+                <Border Classes="card" Margin="0,0,12,12" Padding="14,10">
+                    <StackPanel>
+                        <TextBlock Classes="section-header" Text="ACTIVE PROJECTS"/>
+                        <TextBlock Text="{Binding ActiveLimitText}" FontSize="20" FontWeight="SemiBold"/>
+                    </StackPanel>
+                </Border>
+                <Border Classes="card" Margin="0,0,12,12" Padding="14,10">
+                    <StackPanel>
+                        <TextBlock Classes="section-header" Text="TASKS COMPLETED"/>
+                        <TextBlock Text="{Binding TasksCompletedThisWeek}" FontSize="20" FontWeight="SemiBold"/>
+                    </StackPanel>
+                </Border>
+                <Border Classes="card" Margin="0,0,12,12" Padding="14,10">
+                    <StackPanel>
+                        <TextBlock Classes="section-header" Text="FOCUS TIME"/>
+                        <TextBlock Text="{Binding FocusTimeThisWeekText}" FontSize="20" FontWeight="SemiBold"/>
+                    </StackPanel>
+                </Border>
+                <Border Classes="card" Margin="0,0,12,12" Padding="14,10">
+                    <StackPanel>
+                        <TextBlock Classes="section-header" Text="STARTED / ARCHIVED"/>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="{Binding NewProjectsThisWeek}" FontSize="20" FontWeight="SemiBold"/>
+                            <TextBlock Text="/" FontSize="20" Classes="muted"/>
+                            <TextBlock Text="{Binding ArchivedProjectsThisWeek}" FontSize="20" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </WrapPanel>
+
+            <!-- Over-limit warning -->
+            <Border Classes="card" IsVisible="{Binding IsOverLimit}"
+                    BorderBrush="{DynamicResource WarningBrush}">
+                <TextBlock Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap"
+                           Text="You have more active projects than your limit. Consider pausing or killing one."/>
+            </Border>
+
+            <!-- Focus by project -->
+            <TextBlock Classes="section-header" Text="FOCUS BY ACTIVE PROJECT"/>
+            <Border Classes="card" IsVisible="{Binding HasActivity}">
+                <ItemsControl ItemsSource="{Binding ProjectActivity}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="abs:ProjectActivityLine">
+                            <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,4">
+                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Column="1" Classes="muted" Margin="0,0,16,0"
+                                           Text="{Binding FocusTime, Converter={StaticResource DurationToClock}}"/>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
+                                    <TextBlock Classes="muted" Text="{Binding TasksCompleted}"/>
+                                    <TextBlock Classes="muted" Text="done"/>
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+            <TextBlock Classes="muted" IsVisible="{Binding !HasActivity}"
+                       Text="No focus or completed tasks on active projects this week."/>
+
+            <!-- Stalled -->
+            <TextBlock Classes="section-header" Text="STALLED PROJECTS"/>
+            <Border Classes="card" IsVisible="{Binding HasStalled}">
+                <ItemsControl ItemsSource="{Binding StalledProjects}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="abs:StalledProjectLine">
+                            <Grid ColumnDefinitions="*,Auto" Margin="0,4">
+                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                    <TextBlock Foreground="{DynamicResource WarningBrush}" Text="{Binding DaysSinceActivity}"/>
+                                    <TextBlock Foreground="{DynamicResource WarningBrush}" Text="days idle"/>
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+            <TextBlock Classes="muted" IsVisible="{Binding !HasStalled}"
+                       Text="No stalled active projects. Nice."/>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

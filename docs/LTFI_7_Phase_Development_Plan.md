@@ -560,42 +560,50 @@ Make LTFI meaningfully different from a normal task app by adding project lifecy
 - Starting a new active project requires pausing, killing, or archiving another if over limit.
 - Weekly review starts to become useful.
 
+## Reconciliation with Phases 1–2 (as built)
+
+- **Project states/archiving already done.** The five-state lifecycle, derived archiving on
+  Completed/Killed, and the hard reactivation block for killed projects shipped in Phase 2.
+  This phase adds the limit, milestones, review, and stalled detection on top.
+- **Project fields are settled.** `DesiredOutcome` was dropped; `ProgressPercent` is derived
+  from task/subtask completion (not stored). `LastActiveAt` exists but is unused — this phase
+  can start using it, or derive "last activity" from evidence instead (preferred — see §3.6).
+- **Single active limit, not major/minor.** Implement one limit (default 4). The major/minor
+  split is deferred until it proves necessary.
+- **Limit lives as a constant for now.** No Settings UI yet (that nav item is still a later-phase
+  placeholder); the limit is a `ProjectPolicy` constant, made user-configurable when Settings lands.
+- **"Archive another" drops out of the decision screen** — archiving isn't a separate action
+  anymore (it's implied by Complete/Kill). The choices become pause / kill / cancel.
+
 ## Tasks
 
 ### 3.1 Project detail expansion
 
-Add fields:
+Fields are as built in Phases 1–2 (note `DesiredOutcome` removed, `ProgressPercent` derived):
 
 ```csharp
 string Title
 string? Description
-ProjectStatus Status
-string? DesiredOutcome
+ProjectStatus Status          // Idea | Active | Paused | Completed | Killed
 string? DoneCondition
-int? ProgressPercent
+DateTimeOffset? TargetDate
 DateTimeOffset CreatedAt
 DateTimeOffset UpdatedAt
 DateTimeOffset? LastActiveAt
-DateTimeOffset? TargetDate
+DateTimeOffset? ArchivedAt
+// derived: ProgressPercent, IsArchived
 ```
 
 ### 3.2 Active project limit
 
-Add a user setting:
-
-```text
-Maximum active projects: default 4
-Maximum major active projects: default 3
-```
-
-When user attempts to activate a new project over the limit, show a decision screen:
+A single limit (default 4), enforced in the service. When activating a project would exceed it,
+show a decision screen:
 
 ```text
 You already have 4 active projects.
 To activate this project, choose one:
 - Pause another active project
-- Archive another project
-- Kill another project
+- Kill another active project
 - Cancel activation
 ```
 
@@ -619,12 +627,12 @@ Tasks can optionally belong to milestones.
 
 ### 3.4 Project dashboard
 
-Project dashboard should show:
+Project health overview (folded into the Review page for now — see §3.6 — rather than a separate
+dashboard):
 
-- Active projects
-- Paused projects
-- Blocked projects
-- Projects with no activity for N days
+- Active projects (and count vs. the limit)
+- Paused projects (note: `Blocked` is no longer a project status)
+- Projects with no activity for N days (stalled)
 - Projects with focus time but no completed evidence
 - Projects near target date
 
@@ -641,10 +649,11 @@ Should linked notes/repos remain attached?
 
 This should not be heavy, but should make project closure explicit and positive.
 
-> **Pulled forward (partial):** completing/killing a project already archives it, and killing
-> already blocks reactivation (a hard block). Still owned by this phase: the reflective kill
-> ritual above, and turning the reactivation block into a *timed* cooldown (likely calendar-aware)
-> instead of a permanent block.
+> **Status:** completing/killing already archives, and killing already hard-blocks reactivation.
+> The Phase 3 build focuses on the acceptance items (active limit, milestones, weekly review,
+> stalled detection). The **reflective kill ritual** above and the **timed reactivation cooldown**
+> are intentionally deferred — neither is in the Phase 3 acceptance criteria, and the timed
+> cooldown wants calendar support (Phase 5).
 
 ### 3.6 Weekly review v0
 
