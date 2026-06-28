@@ -326,4 +326,65 @@ public class ServiceTests
         }
         finally { Cleanup(path); }
     }
+
+    [Fact]
+    public async Task Required_focus_time_blocks_completion()
+    {
+        var path = await NewMigratedDbAsync();
+        try
+        {
+            var tasks = new TaskService(new TestDbFactory(path));
+
+            var gated = await tasks.CreateAsync(new TaskDraft { Title = "Study math", RequiredMinutes = 60 });
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => tasks.SetStatusAsync(gated.Id, TaskStatus.Completed));
+            Assert.NotEqual(TaskStatus.Completed, (await tasks.GetByIdAsync(gated.Id))!.Status);
+
+            // No required time -> completes freely.
+            var free = await tasks.CreateAsync(new TaskDraft { Title = "Quick" });
+            await tasks.SetStatusAsync(free.Id, TaskStatus.Completed);
+            Assert.Equal(TaskStatus.Completed, (await tasks.GetByIdAsync(free.Id))!.Status);
+        }
+        finally { Cleanup(path); }
+    }
+
+    [Fact]
+    public async Task Completing_or_killing_a_project_archives_it()
+    {
+        var path = await NewMigratedDbAsync();
+        try
+        {
+            var projects = new ProjectService(new TestDbFactory(path));
+
+            var done = await projects.CreateAsync(new ProjectDraft { Title = "Finish me" });
+            Assert.False((await projects.GetByIdAsync(done.Id))!.IsArchived);
+
+            await projects.UpdateAsync(done.Id, new ProjectDraft { Title = "Finish me", Status = ProjectStatus.Completed });
+            var archived = await projects.GetByIdAsync(done.Id);
+            Assert.True(archived!.IsArchived);
+            Assert.NotNull(archived.ArchivedAt);
+
+            var killed = await projects.CreateAsync(new ProjectDraft { Title = "End me" });
+            await projects.UpdateAsync(killed.Id, new ProjectDraft { Title = "End me", Status = ProjectStatus.Killed });
+            Assert.True((await projects.GetByIdAsync(killed.Id))!.IsArchived);
+        }
+        finally { Cleanup(path); }
+    }
+
+    [Fact]
+    public async Task Killed_project_cannot_be_reactivated()
+    {
+        var path = await NewMigratedDbAsync();
+        try
+        {
+            var projects = new ProjectService(new TestDbFactory(path));
+
+            var project = await projects.CreateAsync(new ProjectDraft { Title = "Doomed" });
+            await projects.UpdateAsync(project.Id, new ProjectDraft { Title = "Doomed", Status = ProjectStatus.Killed });
+
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => projects.UpdateAsync(project.Id, new ProjectDraft { Title = "Doomed", Status = ProjectStatus.Active }));
+        }
+        finally { Cleanup(path); }
+    }
 }

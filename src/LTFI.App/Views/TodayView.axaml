@@ -14,7 +14,9 @@
 
         <!-- Stat strip: quick-start + points + streak -->
         <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto,*" Margin="0,0,0,12">
-            <Button Classes="primary" Content="Start focus" Command="{Binding StartFocusCommand}"/>
+            <Button Classes="primary" Content="Start focus"
+                    Command="{Binding StartFocusCommand}"
+                    ToolTip.Tip="Select a task below to start a focus session"/>
             <Border Grid.Column="1" Classes="chip" Margin="10,0,0,0">
                 <StackPanel Orientation="Horizontal" Spacing="4">
                     <TextBlock Text="Points today:"/>
@@ -28,6 +30,12 @@
                     <TextBlock Text="d"/>
                 </StackPanel>
             </Border>
+            <TextBlock Grid.Column="3"
+                       Margin="14,0,0,0"
+                       VerticalAlignment="Center"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource WarningBrush}"
+                       Text="{Binding FeedbackMessage}"/>
         </Grid>
 
         <!-- Active focus session banner -->
@@ -49,6 +57,7 @@
                            IsVisible="{Binding !HasTasks}"/>
 
                 <ListBox ItemsSource="{Binding TodayTasks}"
+                         SelectedItem="{Binding SelectedTask, Mode=TwoWay}"
                          Background="Transparent"
                          IsVisible="{Binding HasTasks}">
                     <ListBox.ItemTemplate>

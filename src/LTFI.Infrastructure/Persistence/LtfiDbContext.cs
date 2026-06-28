@@ -26,8 +26,9 @@ public class LtfiDbContext(DbContextOptions<LtfiDbContext> options) : DbContext(
         {
             e.Property(p => p.Title).IsRequired();
             e.Property(p => p.Status).HasConversion<string>();
-            // Progress is derived from task/subtask completion, not stored.
+            // Derived, not stored.
             e.Ignore(p => p.ProgressPercent);
+            e.Ignore(p => p.IsArchived);
         });
 
         modelBuilder.Entity<TaskItem>(e =>

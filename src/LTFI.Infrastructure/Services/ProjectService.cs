@@ -53,6 +53,7 @@ public sealed class ProjectService(IDbContextFactory<LtfiDbContext> contextFacto
             CreatedAt = now,
             UpdatedAt = now
         };
+        ApplyArchiveState(project);
 
         await using var db = await _contextFactory.CreateDbContextAsync(cancellationToken);
         db.Projects.Add(project);
@@ -68,14 +69,29 @@ public sealed class ProjectService(IDbContextFactory<LtfiDbContext> contextFacto
         var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == id, cancellationToken)
             ?? throw new InvalidOperationException("Project could not be found.");
 
+        // A killed project is intentionally ended; it can't be reactivated (timed reactivation is Phase 3).
+        if (project.Status == ProjectStatus.Killed && draft.Status != ProjectStatus.Killed)
+        {
+            throw new InvalidOperationException("This project was killed and can't be reactivated.");
+        }
+
         project.Title = draft.Title.Trim();
         project.Description = Normalize(draft.Description);
         project.Status = draft.Status;
         project.DoneCondition = Normalize(draft.DoneCondition);
         project.TargetDate = draft.TargetDate;
         project.UpdatedAt = DateTimeOffset.Now;
+        ApplyArchiveState(project);
 
         await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>Stamps ArchivedAt when a project becomes Completed/Killed, clears it otherwise.</summary>
+    private static void ApplyArchiveState(Project project)
+    {
+        project.ArchivedAt = project.IsArchived
+            ? project.ArchivedAt ?? DateTimeOffset.Now
+            : null;
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)

@@ -85,6 +85,7 @@ public sealed class TaskService(IDbContextFactory<LtfiDbContext> contextFactory)
             Status = draft.Status,
             Priority = draft.Priority,
             DueAt = draft.DueAt,
+            RequiredTime = ToRequiredTime(draft.RequiredMinutes),
             CreatedAt = now,
             UpdatedAt = now,
             CompletedAt = draft.Status == TaskStatus.Completed ? now : null
@@ -111,6 +112,13 @@ public sealed class TaskService(IDbContextFactory<LtfiDbContext> contextFactory)
         task.Description = Normalize(draft.Description);
         task.Priority = draft.Priority;
         task.DueAt = draft.DueAt;
+        task.RequiredTime = ToRequiredTime(draft.RequiredMinutes);
+
+        if (draft.Status == TaskStatus.Completed)
+        {
+            await EnsureRequiredTimeMetAsync(db, task, cancellationToken);
+        }
+
         ApplyStatus(task, draft.Status);
         task.UpdatedAt = DateTimeOffset.Now;
 
@@ -125,6 +133,11 @@ public sealed class TaskService(IDbContextFactory<LtfiDbContext> contextFactory)
             ?? throw new InvalidOperationException("Task could not be found.");
 
         var wasCompleted = task.Status == TaskStatus.Completed;
+
+        if (status == TaskStatus.Completed)
+        {
+            await EnsureRequiredTimeMetAsync(db, task, cancellationToken);
+        }
 
         ApplyStatus(task, status);
         task.UpdatedAt = DateTimeOffset.Now;
@@ -218,6 +231,39 @@ public sealed class TaskService(IDbContextFactory<LtfiDbContext> contextFactory)
 
         db.Subtasks.Remove(subtask);
         await db.SaveChangesAsync(cancellationToken);
+    }
+
+    private static TimeSpan? ToRequiredTime(int? minutes) =>
+        minutes is > 0 ? TimeSpan.FromMinutes(minutes.Value) : null;
+
+    /// <summary>Throws if the task has a required focus time that its accumulated time hasn't met yet.</summary>
+    private static async Task EnsureRequiredTimeMetAsync(LtfiDbContext db, TaskItem task, CancellationToken cancellationToken)
+    {
+        if (task.RequiredTime is not { } required)
+        {
+            return;
+        }
+
+        var spent = await SumCompletedSessionTimeAsync(db, task.Id, cancellationToken);
+        if (spent < required)
+        {
+            throw new InvalidOperationException(
+                $"This task needs {(int)required.TotalMinutes} min of focus before it can be completed " +
+                $"— {(int)spent.TotalMinutes} min logged so far.");
+        }
+    }
+
+    private static async Task<TimeSpan> SumCompletedSessionTimeAsync(LtfiDbContext db, Guid taskId, CancellationToken cancellationToken)
+    {
+        var sessions = await db.FocusSessions
+            .AsNoTracking()
+            .Where(s => s.TaskId == taskId)
+            .Select(s => new { s.Status, s.Duration })
+            .ToListAsync(cancellationToken);
+
+        return sessions
+            .Where(s => s.Status == FocusSessionStatus.Completed && s.Duration != null)
+            .Aggregate(TimeSpan.Zero, (sum, s) => sum + s.Duration!.Value);
     }
 
     /// <summary>Sums each task's completed focus-session durations into <see cref="TaskItem.TimeSpent"/>.</summary>

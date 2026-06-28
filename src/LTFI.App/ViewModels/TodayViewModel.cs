@@ -21,8 +21,8 @@ public partial class TodayViewModel : ViewModelBase, IRefreshable
     private readonly IFocusSessionService _focus;
     private readonly IInsightsService _insights;
 
-    /// <summary>Raised by the quick-start button so the shell can navigate to the Focus page.</summary>
-    public event EventHandler? StartFocusRequested;
+    /// <summary>Raised by the quick-start button with the chosen task so the shell can open Focus prefilled.</summary>
+    public event EventHandler<TaskItem>? StartFocusRequested;
 
     public ObservableCollection<TaskItem> TodayTasks { get; } = [];
 
@@ -35,6 +35,11 @@ public partial class TodayViewModel : ViewModelBase, IRefreshable
 
     [ObservableProperty] private bool hasActiveSession;
     [ObservableProperty] private string activeSessionText = string.Empty;
+    [ObservableProperty] private string feedbackMessage = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartFocusCommand))]
+    private TaskItem? selectedTask;
 
     public TodayViewModel(
         ITaskService taskService,
@@ -88,8 +93,16 @@ public partial class TodayViewModel : ViewModelBase, IRefreshable
         ActiveSessionText = $"{what} — {(int)active.Elapsed.TotalMinutes}m ({state})";
     }
 
-    [RelayCommand]
-    private void StartFocus() => StartFocusRequested?.Invoke(this, EventArgs.Empty);
+    [RelayCommand(CanExecute = nameof(CanStartFocus))]
+    private void StartFocus()
+    {
+        if (SelectedTask is { } task)
+        {
+            StartFocusRequested?.Invoke(this, task);
+        }
+    }
+
+    private bool CanStartFocus() => SelectedTask is not null;
 
     [RelayCommand]
     private async Task CompleteTaskAsync(TaskItem? task)
@@ -99,7 +112,16 @@ public partial class TodayViewModel : ViewModelBase, IRefreshable
             return;
         }
 
-        await _taskService.SetStatusAsync(task.Id, TaskStatus.Completed);
-        await RefreshAsync();
+        try
+        {
+            await _taskService.SetStatusAsync(task.Id, TaskStatus.Completed);
+            FeedbackMessage = string.Empty;
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            // e.g. a required-focus-time gate not yet met.
+            FeedbackMessage = ex.Message;
+        }
     }
 }

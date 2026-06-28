@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
@@ -14,6 +15,7 @@ namespace LTFI.ViewModels;
 public partial class ProjectsViewModel : ViewModelBase, IRefreshable
 {
     private readonly IProjectService _projectService;
+    private readonly List<Project> _allProjects = [];
     private bool _suppressSelectionLoad;
 
     public ObservableCollection<Project> Projects { get; } = [];
@@ -21,6 +23,10 @@ public partial class ProjectsViewModel : ViewModelBase, IRefreshable
     public Array Statuses { get; } = Enum.GetValues<ProjectStatus>();
 
     public string Header => "Projects";
+
+    /// <summary>When false (default), Completed/Killed projects are hidden from the list.</summary>
+    [ObservableProperty]
+    private bool showArchived;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DeleteProjectCommand))]
@@ -61,12 +67,21 @@ public partial class ProjectsViewModel : ViewModelBase, IRefreshable
 
     public async Task RefreshAsync()
     {
-        var selectedId = SelectedProject?.Id;
         var projects = await _projectService.GetAllAsync();
+        _allProjects.Clear();
+        _allProjects.AddRange(projects);
+        ApplyFilter();
+    }
+
+    partial void OnShowArchivedChanged(bool value) => ApplyFilter();
+
+    private void ApplyFilter()
+    {
+        var selectedId = SelectedProject?.Id;
 
         _suppressSelectionLoad = true;
         Projects.Clear();
-        foreach (var project in projects)
+        foreach (var project in _allProjects.Where(p => ShowArchived || !p.IsArchived))
         {
             Projects.Add(project);
         }

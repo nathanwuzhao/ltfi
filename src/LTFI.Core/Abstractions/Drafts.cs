@@ -22,4 +22,7 @@ public sealed record TaskDraft
     public TaskStatus Status { get; init; } = TaskStatus.Ready;
     public TaskPriority Priority { get; init; } = TaskPriority.Medium;
     public DateTimeOffset? DueAt { get; init; }
+
+    /// <summary>Minimum focus minutes required before the task can be completed; null/0 = none.</summary>
+    public int? RequiredMinutes { get; init; }
 }

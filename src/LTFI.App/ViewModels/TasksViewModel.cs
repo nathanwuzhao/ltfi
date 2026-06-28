@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
@@ -22,6 +23,7 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
 {
     private readonly ITaskService _taskService;
     private readonly IProjectService _projectService;
+    private readonly List<TaskItem> _allTasks = [];
     private bool _suppressSelectionLoad;
 
     public ObservableCollection<TaskItem> Tasks { get; } = [];
@@ -65,6 +67,9 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
     private string draftDueDateText = string.Empty;
 
     [ObservableProperty]
+    private string requiredMinutesText = string.Empty;
+
+    [ObservableProperty]
     private ProjectOption? selectedProjectOption;
 
     [ObservableProperty]
@@ -72,6 +77,10 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
 
     [ObservableProperty]
     private string feedbackMessage = string.Empty;
+
+    /// <summary>When false (default), Completed/Canceled tasks are hidden from the list.</summary>
+    [ObservableProperty]
+    private bool showArchived;
 
     public TasksViewModel(ITaskService taskService, IProjectService projectService)
     {
@@ -99,14 +108,26 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
         }
 
         var tasks = await _taskService.GetAllAsync();
+        _allTasks.Clear();
+        _allTasks.AddRange(tasks);
+        ApplyFilter(selectedId);
+    }
+
+    partial void OnShowArchivedChanged(bool value) => ApplyFilter(SelectedTask?.Id);
+
+    private static bool IsArchived(TaskItem task) =>
+        task.Status is TaskStatus.Completed or TaskStatus.Canceled;
+
+    private void ApplyFilter(Guid? preferredId)
+    {
         _suppressSelectionLoad = true;
         Tasks.Clear();
-        foreach (var task in tasks)
+        foreach (var task in _allTasks.Where(t => ShowArchived || !IsArchived(t)))
         {
             Tasks.Add(task);
         }
 
-        SelectedTask = Tasks.FirstOrDefault(t => t.Id == selectedId);
+        SelectedTask = Tasks.FirstOrDefault(t => t.Id == preferredId);
         _suppressSelectionLoad = false;
 
         if (SelectedTask is null)
@@ -243,6 +264,7 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
         SelectedStatus = TaskStatus.Ready;
         SelectedPriority = TaskPriority.Medium;
         DraftDueDateText = string.Empty;
+        RequiredMinutesText = string.Empty;
         SelectedProjectOption = ProjectOptions.FirstOrDefault();
         NewSubtaskTitle = string.Empty;
         FeedbackMessage = string.Empty;
@@ -257,6 +279,9 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
         SelectedStatus = task.Status;
         SelectedPriority = task.Priority;
         DraftDueDateText = task.DueAt?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty;
+        RequiredMinutesText = task.RequiredTime is { } required
+            ? ((int)required.TotalMinutes).ToString(CultureInfo.InvariantCulture)
+            : string.Empty;
         SelectedProjectOption = ProjectOptions.FirstOrDefault(o => o.Id == task.ProjectId)
             ?? ProjectOptions.FirstOrDefault();
         NewSubtaskTitle = string.Empty;
@@ -306,6 +331,18 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
             dueAt = parsed;
         }
 
+        int? requiredMinutes = null;
+        if (!string.IsNullOrWhiteSpace(RequiredMinutesText))
+        {
+            if (!int.TryParse(RequiredMinutesText, out var parsed) || parsed < 0)
+            {
+                FeedbackMessage = "Required minutes must be a non-negative whole number.";
+                return false;
+            }
+
+            requiredMinutes = parsed;
+        }
+
         draft = new TaskDraft
         {
             ProjectId = SelectedProjectOption?.Id,
@@ -313,7 +350,8 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
             Description = DraftDescription,
             Status = SelectedStatus,
             Priority = SelectedPriority,
-            DueAt = dueAt
+            DueAt = dueAt,
+            RequiredMinutes = requiredMinutes
         };
 
         return true;

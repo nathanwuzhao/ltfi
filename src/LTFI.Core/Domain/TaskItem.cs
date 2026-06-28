@@ -39,6 +39,9 @@ public class TaskItem
 
     public DateTimeOffset? CompletedAt { get; set; }
 
+    /// <summary>Minimum focused time required before this task may be completed; null = no minimum.</summary>
+    public TimeSpan? RequiredTime { get; set; }
+
     public ICollection<SubtaskItem> Subtasks { get; set; } = new List<SubtaskItem>();
 
     /// <summary>
@@ -46,4 +49,8 @@ public class TaskItem
     /// (not stored as a column — the read services populate it). Zero when none.
     /// </summary>
     public TimeSpan TimeSpent { get; set; }
+
+    /// <summary>True if no required time is set, or the given accumulated focus time meets it.</summary>
+    public bool MeetsRequiredTime(TimeSpan spent) =>
+        RequiredTime is not { } required || spent >= required;
 }

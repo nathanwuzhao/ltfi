@@ -29,6 +29,12 @@ public class Project
     /// <summary>Last time the project saw activity; drives stalled-project detection later.</summary>
     public DateTimeOffset? LastActiveAt { get; set; }
 
+    /// <summary>When the project was archived (set on Completed/Killed); anchors the kill cooldown.</summary>
+    public DateTimeOffset? ArchivedAt { get; set; }
+
+    /// <summary>Archived projects drop out of the active lists. Derived from terminal status.</summary>
+    public bool IsArchived => Status is ProjectStatus.Completed or ProjectStatus.Killed;
+
     public ICollection<TaskItem> Tasks { get; set; } = new List<TaskItem>();
 
     public ICollection<Milestone> Milestones { get; set; } = new List<Milestone>();

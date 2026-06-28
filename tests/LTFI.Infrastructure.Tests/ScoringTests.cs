@@ -44,4 +44,15 @@ public class ScoringTests
         Assert.Equal(1, Streaks.ConsecutiveDays(
             new[] { today, today.AddDays(-2) }, today));
     }
+
+    [Fact]
+    public void Required_time_gate_logic()
+    {
+        Assert.True(new TaskItem().MeetsRequiredTime(TimeSpan.Zero)); // no requirement
+
+        var task = new TaskItem { RequiredTime = TimeSpan.FromMinutes(60) };
+        Assert.False(task.MeetsRequiredTime(TimeSpan.FromMinutes(30)));
+        Assert.True(task.MeetsRequiredTime(TimeSpan.FromMinutes(60)));
+        Assert.True(task.MeetsRequiredTime(TimeSpan.FromMinutes(90)));
+    }
 }

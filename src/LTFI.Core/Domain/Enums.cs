@@ -1,15 +1,15 @@
 namespace LTFI.Core.Domain;
 
-/// <summary>Project lifecycle states (plan §4.2). <c>Killed</c> is an intentional, non-failure end.</summary>
+/// <summary>
+/// Project lifecycle states (plan §4.2), trimmed to five. <c>Killed</c> is an intentional,
+/// non-failure end. "Archived" is not a status — it is derived from Completed/Killed.
+/// </summary>
 public enum ProjectStatus
 {
-    InboxIdea,
-    Backlog,
+    Idea,
     Active,
     Paused,
-    Blocked,
     Completed,
-    Archived,
     Killed
 }
 

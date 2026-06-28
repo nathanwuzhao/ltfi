@@ -21,6 +21,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private ViewModelBase? currentViewModel;
 
     private readonly NavItem _focusNav;
+    private readonly FocusViewModel _focus;
 
     public MainWindowViewModel(
         TodayViewModel today,
@@ -28,6 +29,7 @@ public partial class MainWindowViewModel : ViewModelBase
         TasksViewModel tasks,
         FocusViewModel focus)
     {
+        _focus = focus;
         _focusNav = new NavItem("Focus", focus);
 
         NavItems =
@@ -42,8 +44,12 @@ public partial class MainWindowViewModel : ViewModelBase
                 "Settings", "Settings and optional integrations arrive in later phases.")),
         ];
 
-        // Quick-start from the Today page jumps to the Focus page.
-        today.StartFocusRequested += (_, _) => SelectedNav = _focusNav;
+        // Quick-start from the Today page: prefill the Focus page for the chosen task, then open it.
+        today.StartFocusRequested += (_, task) =>
+        {
+            _focus.PrepareFor(task.ProjectId, task.Id);
+            SelectedNav = _focusNav;
+        };
 
         SelectedNav = NavItems[0];
     }

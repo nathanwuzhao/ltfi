@@ -14,10 +14,16 @@
         <!-- Project list -->
         <Border Grid.Row="1" Classes="card" Margin="0,18,12,0">
             <Grid RowDefinitions="Auto,*">
-                <Button Content="New Project"
-                        Classes="primary"
-                        HorizontalAlignment="Left"
-                        Command="{Binding NewProjectCommand}"/>
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                    <Button Content="New Project"
+                            Classes="primary"
+                            HorizontalAlignment="Left"
+                            Command="{Binding NewProjectCommand}"/>
+                    <CheckBox Grid.Column="2"
+                              Content="Show archived"
+                              VerticalAlignment="Center"
+                              IsChecked="{Binding ShowArchived, Mode=TwoWay}"/>
+                </Grid>
 
                 <ListBox Grid.Row="1"
                          Margin="0,14,0,0"

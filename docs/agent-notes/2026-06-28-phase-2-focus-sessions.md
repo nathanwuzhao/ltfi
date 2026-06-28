@@ -40,6 +40,23 @@ excluded). It is durable because the source `FocusSession` rows are persisted, a
 drift from the actual sessions. Displayed in the Tasks list and the task editor via a
 `DurationToClockConverter`. Updates on the next load/refresh of the Tasks page.
 
+## Further refinements (on request)
+
+- **Required focus time to complete**: a task can carry a `RequiredTime` (set as minutes in the
+  editor). Completing it is blocked until its accumulated completed-session time meets the
+  requirement — enforced in `TaskService` (both `SetStatusAsync` and `UpdateAsync`), surfaced as
+  a feedback message on the Tasks and Today pages. Pure check lives in `TaskItem.MeetsRequiredTime`.
+- **Project statuses trimmed to five**: `Idea, Active, Paused, Completed, Killed`.
+- **Auto-archive**: "Archived" is derived (`Project.IsArchived` = Completed/Killed; a task is
+  archived when Completed/Canceled). Archived items drop out of the active lists, with a
+  "Show archived" toggle on both Projects and Tasks. `Project.ArchivedAt` is stamped on archive
+  (anchors the future kill cooldown). Migration `AddArchiveAndRequiredTime`.
+- **Kill blocks reactivation**: a `Killed` project can't be moved back to a non-killed status
+  (hard block for now; the *timed* cooldown + calendar is left to Phase 3, see plan §3.5).
+- **Today quick-start**: the "Start focus" button is disabled until a task is selected; clicking
+  it opens the Focus page **prefilled** with that task/project (via `FocusViewModel.PrepareFor`,
+  applied on the page's next refresh). Ignored if a session is already running.
+
 ## Verification
 
 - `dotnet build LTFI.sln` — clean.

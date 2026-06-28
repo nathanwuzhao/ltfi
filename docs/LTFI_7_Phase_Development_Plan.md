@@ -184,35 +184,38 @@ Initial domain entities should include:
 
 ### 4.2 Project states
 
-Projects should not only be “active” or “done.” Use explicit lifecycle states:
+Projects use a small, explicit set of lifecycle states (trimmed from the original eight to the
+five that carry their weight):
 
 ```text
-InboxIdea
-Backlog
+Idea
 Active
 Paused
-Blocked
 Completed
-Archived
 Killed
 ```
 
-`Killed` is not a failure state. It means the user intentionally ended a project to preserve focus.
+`Killed` is not a failure state — it means the user intentionally ended a project to preserve
+focus. **Archived is not a status; it is derived:** a project is archived once it is `Completed`
+or `Killed`, and archived projects drop out of the active lists. Completing or killing a project
+archives it immediately. Killing additionally blocks reactivation (the timed/calendar-aware part
+of that block is Phase 3 — see §3.5).
 
 ### 4.3 Task states
 
-Suggested task states:
+Trimmed to five (as built in Phase 1):
 
 ```text
-Inbox
-Planned
 Ready
 InProgress
-Blocked
 Completed
 Canceled
 Deferred
 ```
+
+A task may carry a **required focus time** — a minimum amount of tracked focus-session time
+that must accumulate before it can be marked `Completed`. Completing a task archives it (drops
+it from the active task list).
 
 ### 4.4 Evidence item types
 
@@ -637,6 +640,11 @@ Should linked notes/repos remain attached?
 ```
 
 This should not be heavy, but should make project closure explicit and positive.
+
+> **Pulled forward (partial):** completing/killing a project already archives it, and killing
+> already blocks reactivation (a hard block). Still owned by this phase: the reflective kill
+> ritual above, and turning the reactivation block into a *timed* cooldown (likely calendar-aware)
+> instead of a permanent block.
 
 ### 3.6 Weekly review v0
 

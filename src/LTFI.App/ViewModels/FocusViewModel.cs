@@ -26,6 +26,10 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
     private readonly ITaskService _taskService;
     private readonly DispatcherTimer _timer;
 
+    private Guid? _pendingProjectId;
+    private Guid? _pendingTaskId;
+    private bool _hasPendingPrefill;
+
     public ObservableCollection<ProjectOption> ProjectOptions { get; } = [];
     public ObservableCollection<TaskOption> TaskOptions { get; } = [];
     public Array Results { get; } = Enum.GetValues<FocusSessionResult>();
@@ -76,6 +80,22 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
     public bool ShowActive => HasActiveSession && !IsReviewing;
     public bool ShowReview => IsReviewing;
 
+    /// <summary>
+    /// Pre-selects a project/task for the next session (used by Today's quick-start). Applied on the
+    /// next refresh, which the navigation into this page triggers. Ignored if a session is running.
+    /// </summary>
+    public void PrepareFor(Guid? projectId, Guid taskId)
+    {
+        if (_focus.HasActiveSession)
+        {
+            return;
+        }
+
+        _pendingProjectId = projectId;
+        _pendingTaskId = taskId;
+        _hasPendingPrefill = true;
+    }
+
     public async Task RefreshAsync()
     {
         var projects = await _projectService.GetAllAsync();
@@ -85,7 +105,6 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
         {
             ProjectOptions.Add(new ProjectOption(p.Id, p.Title));
         }
-        SelectedProjectOption ??= ProjectOptions.FirstOrDefault();
 
         var tasks = await _taskService.GetAllAsync();
         TaskOptions.Clear();
@@ -94,7 +113,18 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
         {
             TaskOptions.Add(new TaskOption(t.Id, t.Title));
         }
-        SelectedTaskOption ??= TaskOptions.FirstOrDefault();
+
+        if (_hasPendingPrefill)
+        {
+            SelectedProjectOption = ProjectOptions.FirstOrDefault(o => o.Id == _pendingProjectId) ?? ProjectOptions.FirstOrDefault();
+            SelectedTaskOption = TaskOptions.FirstOrDefault(o => o.Id == _pendingTaskId) ?? TaskOptions.FirstOrDefault();
+            _hasPendingPrefill = false;
+        }
+        else
+        {
+            SelectedProjectOption ??= ProjectOptions.FirstOrDefault();
+            SelectedTaskOption ??= TaskOptions.FirstOrDefault();
+        }
 
         SyncFromService();
     }
