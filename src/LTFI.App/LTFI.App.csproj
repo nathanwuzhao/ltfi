@@ -5,11 +5,16 @@
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- Keep root namespace as LTFI so XAML x:Class (LTFI.App, LTFI.Views.*) resolves unchanged. -->
+    <RootNamespace>LTFI</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
-    <Folder Include="Models\" />
     <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LTFI.Core\LTFI.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

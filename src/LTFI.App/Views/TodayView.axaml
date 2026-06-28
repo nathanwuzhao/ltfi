@@ -13,13 +13,14 @@
                    FontWeight="SemiBold"/>
 
         <Grid Grid.Row="1" Grid.ColumnSpan="2" ColumnDefinitions="*,Auto" Margin="0,18,0,18">
-            <TextBox PlaceholderText="Add a task title"
-                     Text="{Binding NewTaskTitle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+            <TextBlock VerticalAlignment="Center"
+                       Text="Select a task to track progress or open it in the planner."
+                       Opacity="0.78"/>
             <Button Grid.Column="1"
                     Margin="12,0,0,0"
                     Padding="18,10"
-                    Content="Add Task"
-                    Command="{Binding AddTaskCommand}"/>
+                    Content="Plan New Task"
+                    Command="{Binding CreateTaskCommand}"/>
         </Grid>
 
         <Border Grid.Row="2"
@@ -35,6 +36,7 @@
                             <StackPanel Spacing="6">
                                 <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold"/>
                                 <TextBlock Text="{Binding ProgressText}" Opacity="0.82"/>
+                                <TextBlock Text="{Binding StatusText}" Opacity="0.72"/>
                                 <TextBlock Text="{Binding Priority}" Opacity="0.65"/>
                             </StackPanel>
                         </Border>
@@ -85,15 +87,20 @@
                     <TextBlock Text="{Binding SelectedTask.ProgressText, FallbackValue='-'}" FontSize="18"/>
                 </StackPanel>
 
-                <Grid Grid.Row="5" ColumnDefinitions="Auto,Auto,*" Margin="0,18,0,0">
+                <Grid Grid.Row="5" ColumnDefinitions="Auto,Auto,Auto,*" Margin="0,18,0,0">
                     <Button Padding="16,10"
-                            Content="Complete"
-                            Command="{Binding CompleteSelectedTaskCommand}"/>
+                            Content="{Binding SelectedTask.StartPauseText, FallbackValue='Start'}"
+                            Command="{Binding StartOrPauseSelectedTaskCommand}"/>
                     <Button Grid.Column="1"
                             Margin="10,0,0,0"
                             Padding="16,10"
-                            Content="Delete"
-                            Command="{Binding DeleteSelectedTaskCommand}"/>
+                            Content="Complete"
+                            Command="{Binding CompleteSelectedTaskCommand}"/>
+                    <Button Grid.Column="2"
+                            Margin="10,0,0,0"
+                            Padding="16,10"
+                            Content="Edit Task"
+                            Command="{Binding EditSelectedTaskCommand}"/>
                 </Grid>
             </Grid>
         </Border>

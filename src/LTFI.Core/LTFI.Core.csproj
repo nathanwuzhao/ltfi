@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>LTFI.Core</RootNamespace>
+  </PropertyGroup>
+
+  <!--
+    LTFI.Core holds pure domain logic only.
+    It must NOT reference Avalonia, EF Core/SQLite, GitHub, Logseq, or any OS APIs.
+    Keep this project dependency-free so domain rules stay testable in isolation.
+  -->
+</Project>

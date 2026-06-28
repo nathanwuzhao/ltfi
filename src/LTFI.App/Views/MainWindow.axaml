@@ -1,0 +1,47 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LTFI.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        d:DesignWidth="800"
+        d:DesignHeight="660"
+        Width="800"
+        Height="660"
+        MinWidth="900"
+        MinHeight="600"
+        x:Class="LTFI.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="Task Planner">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel/>
+    </Design.DataContext>
+
+    <Border Background="#0A0D12">
+        <Grid ColumnDefinitions="200,*">
+            <Border Background="#11161F" Padding="18">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Planner"
+                               FontSize="24"
+                               FontWeight="Bold"/>
+                    <TextBlock Text="Tasks and planning"
+                               Opacity="0.68"/>
+
+                    <Button Content="Today"
+                            Padding="14,10"
+                            HorizontalContentAlignment="Left"
+                            Command="{Binding ShowTodayCommand}"/>
+                    <Button Content="Plan Tasks"
+                            Padding="14,10"
+                            HorizontalContentAlignment="Left"
+                            Command="{Binding ShowPlannerCommand}"/>
+                </StackPanel>
+            </Border>
+
+            <ContentControl Grid.Column="1"
+                            Content="{Binding CurrentViewModel}"/>
+        </Grid>
+    </Border>
+</Window>

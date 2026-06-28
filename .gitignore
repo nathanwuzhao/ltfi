@@ -1,7 +1,11 @@
-PLAN.md
-
 # dotenv files
 .env
+
+# LTFI local app data / dev SQLite database (introduced in Phase 1)
+/data/
+*.db
+*.db-shm
+*.db-wal
 
 # User-specific files
 *.rsuser
@@ -422,6 +426,8 @@ test-results/
 # Mac bundle stuff
 *.dmg
 *.app
+# ...but NOT our Avalonia UI project, whose directory name ends in ".App".
+!src/LTFI.App/
 
 # content below from: https://github.com/github/gitignore/blob/main/Global/macOS.gitignore
 # General

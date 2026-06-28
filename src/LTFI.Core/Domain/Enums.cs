@@ -1,4 +1,4 @@
-namespace LTFI.Models;
+namespace LTFI.Core.Domain;
 
 public enum TaskPriority
 {

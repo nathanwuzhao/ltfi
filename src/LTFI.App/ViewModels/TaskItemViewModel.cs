@@ -1,10 +1,9 @@
 using System;
-using CommunityToolkit.Mvvm.ComponentModel;
-using LTFI.Models;
+using LTFI.Core.Domain;
 
 namespace LTFI.ViewModels;
 
-public partial class TaskItemViewModel(TaskItem task) : ViewModelBase
+public class TaskItemViewModel(TaskItem task) : ViewModelBase
 {
     public TaskItem Task { get; } = task;
 
@@ -30,6 +29,12 @@ public partial class TaskItemViewModel(TaskItem task) : ViewModelBase
 
     public bool CanComplete => !IsCompleted && Task.CanBeCompleted;
 
+    public bool CanStartOrResume => Task.CanStartOrResume;
+
+    public bool CanPause => Task.CanPause;
+
+    public string StartPauseText => Task.Status == TaskStatus.InProgress ? "Pause" : "Start";
+
     public string ProgressText =>
         RequiredWorkSeconds <= 0
             ? "No required focus time"
@@ -38,7 +43,15 @@ public partial class TaskItemViewModel(TaskItem task) : ViewModelBase
     public string DueDateText =>
         DueDate is null ? "No due date" : DueDate.Value.ToString("MMM d");
 
-    public string StatusText => Status.ToString();
+    public string StatusText => Status switch
+    {
+        TaskStatus.NotStarted => "Not started",
+        TaskStatus.InProgress => "In progress",
+        TaskStatus.Paused => "Paused",
+        TaskStatus.Completed => "Completed",
+        TaskStatus.Skipped => "Skipped",
+        _ => Status.ToString()
+    };
 
     public void Refresh()
     {
@@ -52,6 +65,9 @@ public partial class TaskItemViewModel(TaskItem task) : ViewModelBase
         OnPropertyChanged(nameof(DueDate));
         OnPropertyChanged(nameof(IsCompleted));
         OnPropertyChanged(nameof(CanComplete));
+        OnPropertyChanged(nameof(CanStartOrResume));
+        OnPropertyChanged(nameof(CanPause));
+        OnPropertyChanged(nameof(StartPauseText));
         OnPropertyChanged(nameof(ProgressText));
         OnPropertyChanged(nameof(DueDateText));
         OnPropertyChanged(nameof(StatusText));

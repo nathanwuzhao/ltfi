@@ -1,6 +1,6 @@
 using System;
 
-namespace LTFI.Models;
+namespace LTFI.Core.Domain;
 
 public class TaskItem
 {
@@ -32,4 +32,8 @@ public class TaskItem
 
     public bool CanBeCompleted =>
         RequiredWorkSeconds <= 0 || AccumulatedWorkSeconds >= RequiredWorkSeconds;
+
+    public bool CanStartOrResume => Status is TaskStatus.NotStarted or TaskStatus.Paused;
+
+    public bool CanPause => Status == TaskStatus.InProgress;
 }
