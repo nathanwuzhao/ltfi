@@ -1,115 +1,68 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using LTFI.Services;
+using LTFI.Core.Abstractions;
+using LTFI.Core.Domain;
+using TaskStatus = LTFI.Core.Domain.TaskStatus;
 
 namespace LTFI.ViewModels;
 
-public partial class TodayViewModel : ViewModelBase
+/// <summary>
+/// The landing page: tasks due today/overdue plus a light summary. Richer "current
+/// operation" content arrives with focus sessions in Phase 2.
+/// </summary>
+public partial class TodayViewModel : ViewModelBase, IRefreshable
 {
-    private readonly TaskService _taskService;
+    private readonly ITaskService _taskService;
+    private readonly IProjectService _projectService;
 
-    public event EventHandler<Guid?>? PlannerRequested;
-
-    public ObservableCollection<TaskItemViewModel> Tasks { get; } = [];
-
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(StartOrPauseSelectedTaskCommand))]
-    [NotifyCanExecuteChangedFor(nameof(CompleteSelectedTaskCommand))]
-    [NotifyCanExecuteChangedFor(nameof(EditSelectedTaskCommand))]
-    private TaskItemViewModel? selectedTask;
-
-    public TodayViewModel(TaskService taskService)
-    {
-        _taskService = taskService;
-        _taskService.TasksChanged += OnTasksChanged;
-        ReloadTasks();
-    }
+    public ObservableCollection<TaskItem> TodayTasks { get; } = [];
 
     public string Header => "Today";
 
+    [ObservableProperty]
+    private int activeProjectCount;
+
+    [ObservableProperty]
+    private bool hasTasks;
+
+    public TodayViewModel(ITaskService taskService, IProjectService projectService)
+    {
+        _taskService = taskService;
+        _projectService = projectService;
+    }
+
+    public string SummaryText =>
+        $"{TodayTasks.Count} task(s) due today · {ActiveProjectCount} active project(s)";
+
+    public async Task RefreshAsync()
+    {
+        var tasks = await _taskService.GetTodayAsync();
+        TodayTasks.Clear();
+        foreach (var task in tasks)
+        {
+            TodayTasks.Add(task);
+        }
+
+        var projects = await _projectService.GetAllAsync();
+        ActiveProjectCount = projects.Count(p => p.Status == ProjectStatus.Active);
+
+        HasTasks = TodayTasks.Count > 0;
+        OnPropertyChanged(nameof(SummaryText));
+    }
+
     [RelayCommand]
-    private void CreateTask()
+    private async Task CompleteTaskAsync(TaskItem? task)
     {
-        PlannerRequested?.Invoke(this, null);
-    }
-
-    [RelayCommand(CanExecute = nameof(CanStartOrPauseSelectedTask))]
-    private void StartOrPauseSelectedTask()
-    {
-        if (SelectedTask is null)
+        if (task is null)
         {
             return;
         }
 
-        if (SelectedTask.CanPause)
-        {
-            _taskService.PauseTask(SelectedTask.Id);
-            return;
-        }
-
-        _taskService.StartTask(SelectedTask.Id);
-    }
-
-    private bool CanStartOrPauseSelectedTask() =>
-        SelectedTask is not null && !SelectedTask.IsCompleted;
-
-    [RelayCommand(CanExecute = nameof(CanCompleteSelectedTask))]
-    private void CompleteSelectedTask()
-    {
-        if (SelectedTask is null)
-        {
-            return;
-        }
-
-        _taskService.CompleteTask(SelectedTask.Id);
-    }
-
-    private bool CanCompleteSelectedTask() => SelectedTask?.CanComplete == true;
-
-    [RelayCommand(CanExecute = nameof(CanEditSelectedTask))]
-    private void EditSelectedTask()
-    {
-        if (SelectedTask is null)
-        {
-            return;
-        }
-
-        PlannerRequested?.Invoke(this, SelectedTask.Id);
-    }
-
-    private bool CanEditSelectedTask() => SelectedTask is not null;
-
-    partial void OnSelectedTaskChanged(TaskItemViewModel? value)
-    {
-        StartOrPauseSelectedTaskCommand.NotifyCanExecuteChanged();
-        CompleteSelectedTaskCommand.NotifyCanExecuteChanged();
-        EditSelectedTaskCommand.NotifyCanExecuteChanged();
-    }
-
-    private void OnTasksChanged(object? sender, EventArgs e)
-    {
-        ReloadTasks(SelectedTask?.Id);
-    }
-
-    private void ReloadTasks(Guid? preferredTaskId = null)
-    {
-        var selectedId = preferredTaskId ?? SelectedTask?.Id;
-
-        Tasks.Clear();
-
-        foreach (var task in _taskService.GetTodayTasks())
-        {
-            Tasks.Add(new TaskItemViewModel(task));
-        }
-
-        SelectedTask = Tasks.FirstOrDefault(task => task.Id == selectedId)
-            ?? Tasks.FirstOrDefault();
-
-        StartOrPauseSelectedTaskCommand.NotifyCanExecuteChanged();
-        CompleteSelectedTaskCommand.NotifyCanExecuteChanged();
-        EditSelectedTaskCommand.NotifyCanExecuteChanged();
+        await _taskService.SetStatusAsync(task.Id, TaskStatus.Completed);
+        await RefreshAsync();
     }
 }

@@ -4,44 +4,71 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        d:DesignWidth="800"
-        d:DesignHeight="660"
-        Width="800"
-        Height="660"
+        d:DesignWidth="1100"
+        d:DesignHeight="720"
+        Width="1100"
+        Height="720"
         MinWidth="900"
         MinHeight="600"
         x:Class="LTFI.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/avalonia-logo.ico"
-        Title="Task Planner">
+        Title="LTFI">
 
-    <Design.DataContext>
-        <vm:MainWindowViewModel/>
-    </Design.DataContext>
+    <Border Background="{DynamicResource BgWindowBrush}">
+        <Grid ColumnDefinitions="220,*">
 
-    <Border Background="#0A0D12">
-        <Grid ColumnDefinitions="200,*">
-            <Border Background="#11161F" Padding="18">
-                <StackPanel Spacing="12">
-                    <TextBlock Text="Planner"
-                               FontSize="24"
-                               FontWeight="Bold"/>
-                    <TextBlock Text="Tasks and planning"
-                               Opacity="0.68"/>
+            <!-- Sidebar -->
+            <Border Background="{DynamicResource BgPanelBrush}"
+                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                    BorderThickness="0,0,1,0"
+                    Padding="16">
+                <Grid RowDefinitions="Auto,*,Auto">
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="LTFI" FontSize="22" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"/>
+                        <TextBlock Classes="muted" FontSize="12" Text="Personal Operations"/>
+                    </StackPanel>
 
-                    <Button Content="Today"
-                            Padding="14,10"
-                            HorizontalContentAlignment="Left"
-                            Command="{Binding ShowTodayCommand}"/>
-                    <Button Content="Plan Tasks"
-                            Padding="14,10"
-                            HorizontalContentAlignment="Left"
-                            Command="{Binding ShowPlannerCommand}"/>
-                </StackPanel>
+                    <ListBox Grid.Row="1"
+                             Classes="nav"
+                             Margin="0,20,0,0"
+                             ItemsSource="{Binding NavItems}"
+                             SelectedItem="{Binding SelectedNav, Mode=TwoWay}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:NavItem">
+                                <TextBlock Text="{Binding Label}"/>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <TextBlock Grid.Row="2" Classes="muted" FontSize="11"
+                               Text="Phase 1 · Foundation"/>
+                </Grid>
             </Border>
 
-            <ContentControl Grid.Column="1"
-                            Content="{Binding CurrentViewModel}"/>
+            <!-- Main area -->
+            <Grid Grid.Column="1" RowDefinitions="Auto,*">
+
+                <!-- Command / search bar placeholder -->
+                <Border Background="{DynamicResource BgPanelBrush}"
+                        BorderBrush="{DynamicResource BorderSubtleBrush}"
+                        BorderThickness="0,0,0,1"
+                        Padding="20,12">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBox MaxWidth="440"
+                                 HorizontalAlignment="Left"
+                                 IsEnabled="False"
+                                 PlaceholderText="Search and commands — coming soon"/>
+                        <TextBlock Grid.Column="1"
+                                   Classes="muted"
+                                   VerticalAlignment="Center"
+                                   Text="{Binding SelectedNav.Label}"/>
+                    </Grid>
+                </Border>
+
+                <ContentControl Grid.Row="1" Content="{Binding CurrentViewModel}"/>
+            </Grid>
         </Grid>
     </Border>
 </Window>

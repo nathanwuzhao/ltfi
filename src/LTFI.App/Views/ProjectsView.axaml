@@ -1,0 +1,115 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:LTFI.ViewModels"
+             xmlns:domain="using:LTFI.Core.Domain"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             x:Class="LTFI.Views.ProjectsView"
+             x:DataType="vm:ProjectsViewModel"
+             mc:Ignorable="d">
+
+    <Grid ColumnDefinitions="2*,3*" RowDefinitions="Auto,*" Margin="28">
+        <TextBlock Grid.ColumnSpan="2" Classes="page-title" Text="{Binding Header}"/>
+
+        <!-- Project list -->
+        <Border Grid.Row="1" Classes="card" Margin="0,18,12,0">
+            <Grid RowDefinitions="Auto,*">
+                <Button Content="New Project"
+                        Classes="primary"
+                        HorizontalAlignment="Left"
+                        Command="{Binding NewProjectCommand}"/>
+
+                <ListBox Grid.Row="1"
+                         Margin="0,14,0,0"
+                         Background="Transparent"
+                         ItemsSource="{Binding Projects}"
+                         SelectedItem="{Binding SelectedProject, Mode=TwoWay}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="domain:Project">
+                            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Margin="2">
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                                    <TextBlock Classes="muted" FontSize="12"
+                                               Text="{Binding Description, FallbackValue=''}"/>
+                                </StackPanel>
+                                <Border Grid.Column="1" Classes="chip">
+                                    <TextBlock Text="{Binding Status}"/>
+                                </Border>
+                                <ProgressBar Grid.Row="1" Grid.ColumnSpan="2"
+                                             Margin="0,8,0,0" Height="4" Maximum="100"
+                                             Value="{Binding ProgressPercent, TargetNullValue=0}"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+        </Border>
+
+        <!-- Editor -->
+        <Border Grid.Row="1" Grid.Column="1" Classes="card" Margin="0,18,0,0">
+            <ScrollViewer>
+                <StackPanel Spacing="14">
+                    <TextBlock Classes="page-title" FontSize="20" Text="{Binding EditorTitle}"/>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="section-header" Text="TITLE"/>
+                        <TextBox Text="{Binding DraftTitle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="section-header" Text="DESCRIPTION"/>
+                        <TextBox Text="{Binding DraftDescription, Mode=TwoWay}"
+                                 AcceptsReturn="True" TextWrapping="Wrap" MinHeight="80"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="section-header" Text="STATUS"/>
+                        <ComboBox HorizontalAlignment="Stretch"
+                                  ItemsSource="{Binding Statuses}"
+                                  SelectedItem="{Binding SelectedStatus, Mode=TwoWay}"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="section-header" Text="DONE CONDITION"/>
+                        <TextBox Text="{Binding DraftDoneCondition, Mode=TwoWay}"
+                                 PlaceholderText="What does finishing this project look like?"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="section-header" Text="TARGET DATE"/>
+                        <TextBox Text="{Binding DraftTargetDateText, Mode=TwoWay}"
+                                 PlaceholderText="YYYY-MM-DD"/>
+                    </StackPanel>
+
+                    <!-- Progress is derived from task/subtask completion, not entered. -->
+                    <StackPanel Spacing="6" IsVisible="{Binding !IsCreatingNew}">
+                        <TextBlock Classes="section-header" Text="PROGRESS (FROM TASKS)"/>
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <ProgressBar Maximum="100"
+                                         VerticalAlignment="Center"
+                                         Value="{Binding SelectedProject.ProgressPercent, TargetNullValue=0}"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Classes="muted" Text="{Binding SelectedProject.ProgressPercent, TargetNullValue=0}"/>
+                                <TextBlock Classes="muted" Text="%"/>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+
+                    <TextBlock Foreground="{DynamicResource WarningBrush}"
+                               TextWrapping="Wrap"
+                               Text="{Binding FeedbackMessage}"/>
+
+                    <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="10">
+                        <Button Classes="primary"
+                                Content="{Binding SaveButtonText}"
+                                Command="{Binding SaveProjectCommand}"/>
+                        <Button Grid.Column="1"
+                                Classes="danger"
+                                Content="Delete"
+                                Command="{Binding DeleteProjectCommand}"/>
+                    </Grid>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</UserControl>

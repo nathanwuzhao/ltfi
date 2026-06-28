@@ -1,0 +1,147 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:LTFI.ViewModels"
+             xmlns:domain="using:LTFI.Core.Domain"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             x:Class="LTFI.Views.TasksView"
+             x:DataType="vm:TasksViewModel"
+             mc:Ignorable="d">
+
+    <Grid ColumnDefinitions="2*,3*" RowDefinitions="Auto,*" Margin="28">
+        <TextBlock Grid.ColumnSpan="2" Classes="page-title" Text="{Binding Header}"/>
+
+        <!-- Task list -->
+        <Border Grid.Row="1" Classes="card" Margin="0,18,12,0">
+            <Grid RowDefinitions="Auto,*">
+                <Button Content="New Task"
+                        Classes="primary"
+                        HorizontalAlignment="Left"
+                        Command="{Binding NewTaskCommand}"/>
+
+                <ListBox Grid.Row="1"
+                         Margin="0,14,0,0"
+                         Background="Transparent"
+                         ItemsSource="{Binding Tasks}"
+                         SelectedItem="{Binding SelectedTask, Mode=TwoWay}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="domain:TaskItem">
+                            <Grid ColumnDefinitions="*,Auto" Margin="2">
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                                    <TextBlock Classes="muted" FontSize="12" Text="{Binding Priority}"/>
+                                </StackPanel>
+                                <Border Grid.Column="1" Classes="chip">
+                                    <TextBlock Text="{Binding Status}"/>
+                                </Border>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+        </Border>
+
+        <!-- Editor -->
+        <Border Grid.Row="1" Grid.Column="1" Classes="card" Margin="0,18,0,0">
+            <ScrollViewer>
+                <StackPanel Spacing="14">
+                    <TextBlock Classes="page-title" FontSize="20" Text="{Binding EditorTitle}"/>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="section-header" Text="TITLE"/>
+                        <TextBox Text="{Binding DraftTitle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="section-header" Text="DESCRIPTION"/>
+                        <TextBox Text="{Binding DraftDescription, Mode=TwoWay}"
+                                 AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="section-header" Text="PROJECT"/>
+                        <ComboBox HorizontalAlignment="Stretch"
+                                  ItemsSource="{Binding ProjectOptions}"
+                                  SelectedItem="{Binding SelectedProjectOption, Mode=TwoWay}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ProjectOption">
+                                    <TextBlock Text="{Binding Name}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
+                        <StackPanel Spacing="6">
+                            <TextBlock Classes="section-header" Text="STATUS"/>
+                            <ComboBox HorizontalAlignment="Stretch"
+                                      ItemsSource="{Binding Statuses}"
+                                      SelectedItem="{Binding SelectedStatus, Mode=TwoWay}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="6">
+                            <TextBlock Classes="section-header" Text="PRIORITY"/>
+                            <ComboBox HorizontalAlignment="Stretch"
+                                      ItemsSource="{Binding Priorities}"
+                                      SelectedItem="{Binding SelectedPriority, Mode=TwoWay}"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="section-header" Text="DUE DATE"/>
+                        <TextBox Text="{Binding DraftDueDateText, Mode=TwoWay}"
+                                 PlaceholderText="YYYY-MM-DD"/>
+                    </StackPanel>
+
+                    <TextBlock Foreground="{DynamicResource WarningBrush}"
+                               TextWrapping="Wrap"
+                               Text="{Binding FeedbackMessage}"/>
+
+                    <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="10">
+                        <Button Classes="primary"
+                                Content="{Binding SaveButtonText}"
+                                Command="{Binding SaveTaskCommand}"/>
+                        <Button Grid.Column="1"
+                                Classes="danger"
+                                Content="Delete"
+                                Command="{Binding DeleteTaskCommand}"/>
+                    </Grid>
+
+                    <!-- Subtasks (available once the task is saved) -->
+                    <Border BorderBrush="{DynamicResource BorderSubtleBrush}"
+                            BorderThickness="0,1,0,0"
+                            Padding="0,14,0,0"
+                            IsVisible="{Binding CanManageSubtasks}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Classes="section-header" Text="SUBTASKS"/>
+
+                            <ItemsControl ItemsSource="{Binding Subtasks}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:SubtaskItemViewModel">
+                                        <Grid ColumnDefinitions="*,Auto" Margin="0,2">
+                                            <CheckBox Content="{Binding Title}"
+                                                      IsChecked="{Binding IsCompleted, Mode=TwoWay}"/>
+                                            <Button Grid.Column="1"
+                                                    Classes="danger"
+                                                    Content="Remove"
+                                                    Padding="10,4"
+                                                    Command="{ReflectionBinding $parent[UserControl].DataContext.DeleteSubtaskCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                <TextBox Text="{Binding NewSubtaskTitle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                         PlaceholderText="Add a subtask…"/>
+                                <Button Grid.Column="1"
+                                        Content="Add"
+                                        Command="{Binding AddSubtaskCommand}"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</UserControl>

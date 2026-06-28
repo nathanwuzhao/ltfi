@@ -1,46 +1,67 @@
 using System;
+using System.Collections.ObjectModel;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using LTFI.Services;
+using Serilog;
 
 namespace LTFI.ViewModels;
 
+/// <summary>
+/// The app shell: owns the sidebar navigation items and the currently displayed page.
+/// Pages are injected; the placeholder sections are created inline.
+/// </summary>
 public partial class MainWindowViewModel : ViewModelBase
 {
-    private readonly TaskPlannerViewModel _planner;
-
-    public MainWindowViewModel()
-    {
-        var taskService = new TaskService();
-
-        Today = new TodayViewModel(taskService);
-        _planner = new TaskPlannerViewModel(taskService);
-
-        Today.PlannerRequested += OnPlannerRequested;
-        CurrentViewModel = Today;
-    }
-
-    public TodayViewModel Today { get; }
+    public ObservableCollection<NavItem> NavItems { get; }
 
     [ObservableProperty]
-    private ViewModelBase currentViewModel = null!;
+    private NavItem? selectedNav;
 
-    [RelayCommand]
-    private void ShowToday()
+    [ObservableProperty]
+    private ViewModelBase? currentViewModel;
+
+    public MainWindowViewModel(TodayViewModel today, ProjectsViewModel projects, TasksViewModel tasks)
     {
-        CurrentViewModel = Today;
+        NavItems =
+        [
+            new NavItem("Today", today),
+            new NavItem("Projects", projects),
+            new NavItem("Tasks", tasks),
+            new NavItem("Focus", new PlaceholderViewModel(
+                "Focus", "Focus sessions and the work timer arrive in Phase 2.")),
+            new NavItem("Review", new PlaceholderViewModel(
+                "Review", "Daily and weekly review loops arrive in Phase 3.")),
+            new NavItem("Settings", new PlaceholderViewModel(
+                "Settings", "Settings and optional integrations arrive in later phases.")),
+        ];
+
+        SelectedNav = NavItems[0];
     }
 
-    [RelayCommand]
-    private void ShowPlanner()
+    partial void OnSelectedNavChanged(NavItem? value)
     {
-        _planner.LoadTask(null);
-        CurrentViewModel = _planner;
+        if (value is null)
+        {
+            return;
+        }
+
+        CurrentViewModel = value.ViewModel;
+
+        if (value.ViewModel is IRefreshable refreshable)
+        {
+            _ = SafeRefreshAsync(refreshable);
+        }
     }
 
-    private void OnPlannerRequested(object? sender, Guid? taskId)
+    private static async Task SafeRefreshAsync(IRefreshable refreshable)
     {
-        _planner.LoadTask(taskId);
-        CurrentViewModel = _planner;
+        try
+        {
+            await refreshable.RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to refresh {Page}", refreshable.GetType().Name);
+        }
     }
 }

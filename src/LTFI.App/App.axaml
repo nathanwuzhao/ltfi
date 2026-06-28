@@ -2,14 +2,30 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="LTFI.App"
              xmlns:local="using:LTFI"
-             RequestedThemeVariant="Default">
-             <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
+             RequestedThemeVariant="Dark">
 
     <Application.DataTemplates>
         <local:ViewLocator/>
     </Application.DataTemplates>
-  
+
+    <Application.Resources>
+        <!-- Command-center dark palette (plan §1.6). Muted backgrounds, thin borders, clear status colours. -->
+        <SolidColorBrush x:Key="BgWindowBrush" Color="#0A0D12"/>
+        <SolidColorBrush x:Key="BgPanelBrush" Color="#11161F"/>
+        <SolidColorBrush x:Key="BgPanelAltBrush" Color="#151A22"/>
+        <SolidColorBrush x:Key="BgCardBrush" Color="#1A2130"/>
+        <SolidColorBrush x:Key="BorderSubtleBrush" Color="#2A3346"/>
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#E6EAF2"/>
+        <SolidColorBrush x:Key="TextMutedBrush" Color="#8A93A6"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#4F8DFD"/>
+        <SolidColorBrush x:Key="AccentHoverBrush" Color="#3F7DE8"/>
+        <SolidColorBrush x:Key="SuccessBrush" Color="#3FB950"/>
+        <SolidColorBrush x:Key="WarningBrush" Color="#F2C46D"/>
+        <SolidColorBrush x:Key="DangerBrush" Color="#F85149"/>
+    </Application.Resources>
+
     <Application.Styles>
         <FluentTheme />
+        <StyleInclude Source="avares://LTFI.App/Styles/Controls.axaml"/>
     </Application.Styles>
 </Application>
