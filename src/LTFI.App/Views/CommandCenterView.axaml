@@ -1,0 +1,338 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:LTFI.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1180" d:DesignHeight="900"
+             x:Class="LTFI.Views.CommandCenterView"
+             x:DataType="vm:CommandCenterViewModel"
+             Background="{DynamicResource BgWindowBrush}">
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel x:Name="RootStack" Margin="9" Spacing="8">
+
+            <!-- top area: wide left column + narrow right column (no grid spanning) -->
+            <Grid ColumnDefinitions="1.6*,*">
+
+                <!-- ==== LEFT COLUMN ==== -->
+                <StackPanel Grid.Column="0" Spacing="8">
+
+                    <!-- CURRENT OPERATION -->
+                    <Border Classes="panel">
+                        <StackPanel>
+                            <Button Classes="hd" Command="{Binding ToggleOpsCommand}">
+                                <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+                                    <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{Binding ProgBrush}"/>
+                                    <TextBlock Grid.Column="1" Classes="micro" Text="CURRENT OPERATION" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="3" Classes="micro-dim" Text="{Binding OpContext}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <TextBlock Grid.Column="4" Classes="faint" FontSize="10" Text="{Binding OpsCaret}" VerticalAlignment="Center"/>
+                                </Grid>
+                            </Button>
+                            <Grid Margin="12,10" ColumnDefinitions="Auto,*,Auto">
+                                <TextBlock Classes="num bright" FontSize="34" FontWeight="Bold" VerticalAlignment="Center" Text="{Binding ClockText}"/>
+                                <StackPanel Grid.Column="1" Margin="16,0" VerticalAlignment="Center" Spacing="2">
+                                    <TextBlock Classes="bright" FontSize="12" TextTrimming="CharacterEllipsis" Text="{Binding OpTitle}"/>
+                                    <TextBlock Classes="dim" FontSize="10" TextTrimming="CharacterEllipsis" Text="{Binding OpIntent}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                    <Button Classes="primary" Content="{Binding RunLabel}" Command="{Binding ToggleRunCommand}"/>
+                                    <Button Classes="ghost" Content="FINISH" Command="{Binding FinishCommand}" IsEnabled="{Binding HasActiveSession}"/>
+                                </StackPanel>
+                            </Grid>
+                            <Border IsVisible="{Binding OpsExpanded}" Padding="12,9,12,11"
+                                    BorderBrush="{DynamicResource BorderInnerBrush}" BorderThickness="0,1,0,0">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Classes="micro-dim" Text="OPERATION DETAIL"/>
+                                    <TextBlock Classes="muted" FontSize="10.5" TextWrapping="Wrap"
+                                               Text="Live session state is shown above. A full per-session log lands with the evidence timeline in a later phase; recent evidence appears in the feed below."/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ACTIVE PROJECTS -->
+                    <Border Classes="panel">
+                        <StackPanel>
+                            <Button Classes="hd" Command="{Binding ToggleProjectsCommand}">
+                                <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                                    <TextBlock Classes="micro" Text="ACTIVE PROJECTS" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Classes="micro-dim" Margin="10,0,0,0" Text="{Binding ActiveLimitText}" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="3" Classes="faint" FontSize="10" Text="{Binding ProjectsCaret}" VerticalAlignment="Center"/>
+                                </Grid>
+                            </Button>
+                            <ItemsControl ItemsSource="{Binding Projects}" Margin="0,4">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ProjectRow">
+                                        <Button Classes="row" Command="{ReflectionBinding $parent[UserControl].DataContext.SelectProjectCommand}" CommandParameter="{Binding Id}">
+                                            <Border Background="{Binding RowBg}" Padding="12,6"
+                                                    BorderBrush="{DynamicResource BorderRowBrush}" BorderThickness="0,0,0,1">
+                                                <Grid ColumnDefinitions="Auto,86,*,110,44,84">
+                                                    <Ellipse Width="7" Height="7" VerticalAlignment="Center" Margin="0,0,10,0" Fill="{Binding Dot}"/>
+                                                    <TextBlock Grid.Column="1" FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                               Foreground="{DynamicResource TextBodyBrush}" Text="{Binding Code}"/>
+                                                    <TextBlock Grid.Column="2" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,8,0"
+                                                               Foreground="{DynamicResource TextSecondaryBrush}" Text="{Binding Name}"/>
+                                                    <Grid Grid.Column="3" ColumnDefinitions="*,Auto" VerticalAlignment="Center" Margin="0,0,8,0">
+                                                        <ProgressBar Classes="meter" Value="{Binding BarValue}" Foreground="{Binding BarBrush}"/>
+                                                        <TextBlock Grid.Column="1" Classes="num muted" FontSize="10" Margin="7,0,0,0" Text="{Binding PctText}"/>
+                                                    </Grid>
+                                                    <TextBlock Grid.Column="4" FontSize="10" Classes="num dim" VerticalAlignment="Center" TextAlignment="Right" Text="{Binding Focus}"/>
+                                                    <TextBlock Grid.Column="5" FontSize="9" LetterSpacing="0.4" VerticalAlignment="Center" TextAlignment="Right"
+                                                               Foreground="{Binding RiskBrush}" Text="{Binding Risk}"/>
+                                                </Grid>
+                                            </Border>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Border IsVisible="{Binding ProjectsExpanded}" Padding="12,9,12,11"
+                                    BorderBrush="{DynamicResource BorderInnerBrush}" BorderThickness="0,1,0,0">
+                                <TextBlock Classes="muted" FontSize="10.5" TextWrapping="Wrap"
+                                           Text="Dot &amp; risk are derived from evidence: green = on track, amber = time logged but no completions, red = stalled. Click a project to drive the PROJECT PROGRESS panel below."/>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- EVIDENCE FEED -->
+                    <Border Classes="panel">
+                        <StackPanel>
+                            <Border Classes="panel-hd">
+                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                    <TextBlock Classes="micro" Text="EVIDENCE FEED" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="2" Classes="micro-dim" Text="{Binding EvidenceCountLabel}" VerticalAlignment="Center"/>
+                                </Grid>
+                            </Border>
+                            <ScrollViewer MaxHeight="188" Margin="0,3" HorizontalScrollBarVisibility="Disabled">
+                                <ItemsControl ItemsSource="{Binding Evidence}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:EvidenceRow">
+                                            <Grid ColumnDefinitions="58,64,60,*" Margin="12,4">
+                                                <TextBlock FontSize="10.5" Classes="faint" VerticalAlignment="Center" Text="{Binding Time}"/>
+                                                <Border Grid.Column="1" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1"
+                                                        CornerRadius="3" Margin="0,0,8,0" Padding="0,1" VerticalAlignment="Center">
+                                                    <TextBlock FontSize="8.5" LetterSpacing="0.4" TextAlignment="Center"
+                                                               Foreground="{Binding TagBrush}" Text="{Binding Tag}"/>
+                                                </Border>
+                                                <TextBlock Grid.Column="2" FontSize="10.5" Classes="muted" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="{Binding Project}"/>
+                                                <TextBlock Grid.Column="3" FontSize="10.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource TextSecondaryBrush}" Text="{Binding Text}"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                            <TextBlock Classes="muted" FontSize="10" Margin="12,4,12,11" IsVisible="{Binding !Evidence.Count}"
+                                       Text="No evidence yet. Complete a task or finish a focus session to log the first signal."/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- ==== RIGHT COLUMN ==== -->
+                <StackPanel Grid.Column="1" Margin="8,0,0,0" Spacing="8">
+
+                    <!-- FOCUS DEBT -->
+                    <Border Classes="panel">
+                        <StackPanel>
+                            <Button Classes="hd" Command="{Binding ToggleDebtCommand}">
+                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                    <TextBlock Classes="micro" Text="FOCUS DEBT" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="2" Classes="faint" FontSize="10" Text="{Binding DebtCaret}" VerticalAlignment="Center"/>
+                                </Grid>
+                            </Button>
+                            <StackPanel Margin="11,9" Spacing="10">
+                                <StackPanel Spacing="4">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Classes="dim" FontSize="10" Text="THIS WEEK"/>
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="3">
+                                            <TextBlock Classes="num" FontSize="10" FontWeight="Bold" Foreground="{Binding WeekFocusBrush}" Text="{Binding WeekFocusText}"/>
+                                            <TextBlock Classes="dim" FontSize="10" Text="{Binding WeekTargetText}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                    <ProgressBar Classes="meter" Value="{Binding WeekFocusValue}" Foreground="{Binding WeekFocusBrush}"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="18">
+                                    <StackPanel Spacing="1">
+                                        <TextBlock Classes="faint" FontSize="9" Text="FOCUS STREAK"/>
+                                        <TextBlock Classes="num" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" Text="{Binding FocusStreakText}"/>
+                                    </StackPanel>
+                                    <StackPanel Spacing="1">
+                                        <TextBlock Classes="faint" FontSize="9" Text="TASKS / WK"/>
+                                        <TextBlock Classes="num bright" FontSize="16" FontWeight="Bold" Text="{Binding TasksThisWeek}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                            <Border IsVisible="{Binding DebtExpanded}" Padding="11,0,11,11"
+                                    BorderBrush="{DynamicResource BorderInnerBrush}" BorderThickness="0,1,0,0">
+                                <StackPanel Margin="0,9,0,0" Spacing="3">
+                                    <TextBlock Classes="micro-dim" Text="TIME LOGGED vs EVIDENCE"/>
+                                    <ItemsControl ItemsSource="{Binding DebtLines}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:DebtRow">
+                                                <Grid ColumnDefinitions="Auto,64,40,*" Margin="0,3,0,0">
+                                                    <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,7,0" Fill="{Binding Dot}"/>
+                                                    <TextBlock Grid.Column="1" FontSize="10" Foreground="{DynamicResource TextBodyBrush}" TextTrimming="CharacterEllipsis" Text="{Binding Code}"/>
+                                                    <TextBlock Grid.Column="2" FontSize="10" Classes="muted" Text="{Binding Logged}"/>
+                                                    <TextBlock Grid.Column="3" FontSize="10" Foreground="{Binding NoteBrush}" TextTrimming="CharacterEllipsis" Text="{Binding Note}"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- UPCOMING -->
+                    <Border Classes="panel">
+                        <StackPanel>
+                            <Border Classes="panel-hd">
+                                <TextBlock Classes="micro" Text="UPCOMING"/>
+                            </Border>
+                            <ItemsControl ItemsSource="{Binding Deadlines}" Margin="0,4">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:DeadlineRow">
+                                        <Grid ColumnDefinitions="Auto,44,*,Auto" Margin="11,5">
+                                            <Ellipse Width="5" Height="5" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{Binding Dot}"/>
+                                            <TextBlock Grid.Column="1" FontSize="10.5" VerticalAlignment="Center" Foreground="{DynamicResource TextBodyBrush}" Text="{Binding Date}"/>
+                                            <TextBlock Grid.Column="2" FontSize="10.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,6,0"
+                                                       Foreground="{DynamicResource TextSecondaryBrush}" Text="{Binding Item}"/>
+                                            <TextBlock Grid.Column="3" FontSize="9.5" VerticalAlignment="Center" Foreground="{Binding Dot}" Text="{Binding Days}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Classes="muted" FontSize="10" Margin="11,4,11,11" IsVisible="{Binding !Deadlines.Count}"
+                                       Text="No dated tasks or project targets."/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- WEEKLY COMMITMENTS (preview) -->
+                    <Border Classes="panel">
+                        <StackPanel>
+                            <Border Classes="panel-hd">
+                                <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                                    <TextBlock Classes="micro" Text="WEEKLY COMMITMENTS" VerticalAlignment="Center"/>
+                                    <Border Grid.Column="1" Classes="chip" Margin="8,0,0,0" Padding="5,1">
+                                        <TextBlock Text="PREVIEW" FontSize="8"/>
+                                    </Border>
+                                    <TextBlock Grid.Column="3" Classes="micro-dim" Text="{Binding CommitProgress}" VerticalAlignment="Center"/>
+                                </Grid>
+                            </Border>
+                            <ItemsControl ItemsSource="{Binding Commitments}" Margin="0,5">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:CommitRow">
+                                        <Grid ColumnDefinitions="Auto,*,Auto" Margin="11,6">
+                                            <TextBlock FontSize="13" VerticalAlignment="Center" Margin="0,0,9,0" Foreground="{Binding MarkBrush}" Text="{Binding Mark}"/>
+                                            <TextBlock Grid.Column="1" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,6,0"
+                                                       Foreground="{Binding TextBrush}" Text="{Binding Text}"/>
+                                            <TextBlock Grid.Column="2" FontSize="9" Classes="faint" VerticalAlignment="Center" Text="{Binding Project}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Border Padding="11,0,11,10">
+                                <TextBlock Classes="faint" FontSize="9" TextWrapping="Wrap"
+                                           Text="Stand-in: your top open tasks. A dedicated weekly-commitments loop (set Monday · reviewed Friday) arrives in a later phase."/>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+
+            <!-- ==== PROJECT PROGRESS (full width) ==== -->
+            <Border Classes="panel">
+                <StackPanel>
+                    <Border Classes="panel-hd">
+                        <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto">
+                            <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{Binding ProgBrush}"/>
+                            <TextBlock Grid.Column="1" Classes="micro" Text="PROJECT PROGRESS" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="2" Classes="micro-dim" Margin="8,0,0,0" Text="DERIVED FROM EVIDENCE · CLICK A PROJECT ABOVE" VerticalAlignment="Center"/>
+                            <ItemsControl Grid.Column="4" ItemsSource="{Binding ProgressTabs}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="6"/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ProjectRow">
+                                        <Button Classes="row" Command="{ReflectionBinding $parent[UserControl].DataContext.SelectProjectCommand}" CommandParameter="{Binding Id}">
+                                            <Border Background="{Binding RowBg}" CornerRadius="3" Padding="8,3"
+                                                    BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1">
+                                                <TextBlock FontSize="9" LetterSpacing="0.4" FontWeight="SemiBold" Foreground="{Binding RiskBrush}" Text="{Binding Code}"/>
+                                            </Border>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Grid>
+                    </Border>
+
+                    <Panel>
+                        <TextBlock Classes="muted" FontSize="11" Margin="14" IsVisible="{Binding !HasProgressProject}"
+                                   Text="No active project selected. Activate a project to see its evidence-derived progress trend."/>
+
+                        <StackPanel IsVisible="{Binding HasProgressProject}">
+                            <Grid Margin="13,9,13,4" ColumnDefinitions="Auto,*,Auto,Auto">
+                                <TextBlock Classes="num" FontSize="22" FontWeight="Bold" VerticalAlignment="Bottom" Foreground="{Binding ProgBrush}">
+                                    <TextBlock.Text><Binding Path="ProgPct" StringFormat="{}{0}%"/></TextBlock.Text>
+                                </TextBlock>
+                                <TextBlock Grid.Column="1" FontSize="11" Margin="11,0,9,0" VerticalAlignment="Bottom" TextTrimming="CharacterEllipsis"
+                                           Foreground="{DynamicResource TextSecondaryBrush}" Text="{Binding ProgName}"/>
+                                <TextBlock Grid.Column="2" Classes="faint" FontSize="9" Margin="0,0,9,0" VerticalAlignment="Bottom">
+                                    <TextBlock.Text>
+                                        <MultiBinding StringFormat="→ {0} ({1}%)">
+                                            <Binding Path="ProgMilestone"/>
+                                            <Binding Path="ProgTargetPct"/>
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                </TextBlock>
+                                <TextBlock Grid.Column="3" Classes="num dim" FontSize="10" VerticalAlignment="Bottom" Text="{Binding ProgDelta}"/>
+                            </Grid>
+
+                            <Viewbox Height="120" Stretch="Fill" Margin="13,0">
+                                <Canvas Width="560" Height="150">
+                                    <Line StartPoint="12,74.5" EndPoint="548,74.5" Stroke="#1A1F28" StrokeThickness="1"/>
+                                    <Line StartPoint="12,53" EndPoint="548,53" Stroke="#1A1F28" StrokeThickness="1"/>
+                                    <Line StartPoint="12,31.5" EndPoint="548,31.5" Stroke="#1A1F28" StrokeThickness="1"/>
+                                    <TextBlock Canvas.Left="0" Canvas.Top="70" FontSize="7" Foreground="#3A4150" Text="25"/>
+                                    <TextBlock Canvas.Left="0" Canvas.Top="48" FontSize="7" Foreground="#3A4150" Text="50"/>
+                                    <TextBlock Canvas.Left="0" Canvas.Top="27" FontSize="7" Foreground="#3A4150" Text="75"/>
+                                    <Path Data="{Binding TrendMilestone}" Stroke="{Binding ProgBrush}" StrokeThickness="1" StrokeDashArray="4,4" Opacity="0.5"/>
+                                    <Path Data="{Binding TrendArea}" Fill="{Binding ProgBrush}" Opacity="0.12"/>
+                                    <Path Data="{Binding TrendLine}" Stroke="{Binding ProgBrush}" StrokeThickness="2" StrokeJoin="Round"/>
+                                    <Line StartPoint="12,142" EndPoint="548,142" Stroke="#23272F" StrokeThickness="1"/>
+                                </Canvas>
+                            </Viewbox>
+                            <Grid Margin="13,1,13,0" ColumnDefinitions="Auto,*,Auto,*,Auto">
+                                <TextBlock Classes="faint" FontSize="8.5" Text="30 DAYS AGO"/>
+                                <TextBlock Grid.Column="2" FontSize="8.5" Foreground="{Binding ProgBrush}" Text="— — milestone target"/>
+                                <TextBlock Grid.Column="4" Classes="faint" FontSize="8.5" Text="TODAY"/>
+                            </Grid>
+
+                            <Border Margin="0,8,0,0" Padding="13,8,13,11" BorderBrush="{DynamicResource BorderInnerBrush}" BorderThickness="0,1,0,0">
+                                <StackPanel Spacing="6">
+                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                        <TextBlock Classes="micro-dim" Text="DAILY ACTIVITY · 90 DAYS" VerticalAlignment="Center"/>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+                                            <TextBlock Classes="dim" FontSize="9" Text="{Binding LaneStat}"/>
+                                            <TextBlock Classes="faint" FontSize="9" Text="·"/>
+                                            <TextBlock Classes="dim" FontSize="9" Text="{Binding LaneLast}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                    <ItemsControl ItemsSource="{Binding ActivityCells}" Height="14">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:HeatCell">
+                                                <Border Height="14" Margin="0.5,0" CornerRadius="1" Background="{Binding Color}"/>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Panel>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

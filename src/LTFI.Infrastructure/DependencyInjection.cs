@@ -25,6 +25,7 @@ public static class DependencyInjection
         services.AddSingleton<IFocusSessionService, FocusSessionService>();
         services.AddSingleton<IInsightsService, InsightsService>();
         services.AddSingleton<IReviewService, ReviewService>();
+        services.AddSingleton<IEvidenceService, EvidenceService>();
 
         return services;
     }

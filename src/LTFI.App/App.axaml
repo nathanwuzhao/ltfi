@@ -11,19 +11,49 @@
 
     <Application.Resources>
         <conv:DurationToClockConverter x:Key="DurationToClock"/>
-        <!-- Command-center dark palette (plan §1.6). Muted backgrounds, thin borders, clear status colours. -->
-        <SolidColorBrush x:Key="BgWindowBrush" Color="#0A0D12"/>
-        <SolidColorBrush x:Key="BgPanelBrush" Color="#11161F"/>
-        <SolidColorBrush x:Key="BgPanelAltBrush" Color="#151A22"/>
-        <SolidColorBrush x:Key="BgCardBrush" Color="#1A2130"/>
-        <SolidColorBrush x:Key="BorderSubtleBrush" Color="#2A3346"/>
-        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#E6EAF2"/>
-        <SolidColorBrush x:Key="TextMutedBrush" Color="#8A93A6"/>
-        <SolidColorBrush x:Key="AccentBrush" Color="#4F8DFD"/>
-        <SolidColorBrush x:Key="AccentHoverBrush" Color="#3F7DE8"/>
-        <SolidColorBrush x:Key="SuccessBrush" Color="#3FB950"/>
-        <SolidColorBrush x:Key="WarningBrush" Color="#F2C46D"/>
-        <SolidColorBrush x:Key="DangerBrush" Color="#F85149"/>
+
+        <!--
+            LTFI Command Center palette (imported from the "LTFI Command Center" design doc).
+            Near-black surfaces, monospace type, status-only colour (green / amber / red).
+            Existing keys keep their names so older views bind unchanged; values are updated.
+        -->
+
+        <!-- Typography: JetBrains Mono bundled in Assets/Fonts, falling back to Windows monos. -->
+        <FontFamily x:Key="MonoFont">avares://LTFI.App/Assets/Fonts#JetBrains Mono, Cascadia Mono, Consolas, monospace</FontFamily>
+
+        <!-- Surfaces -->
+        <SolidColorBrush x:Key="BgWindowBrush" Color="#090B10"/>       <!-- grid / page background -->
+        <SolidColorBrush x:Key="BgPanelBrush" Color="#0C0E13"/>        <!-- chrome: top bar + nav rail -->
+        <SolidColorBrush x:Key="BgPanelAltBrush" Color="#12161E"/>     <!-- hover surface -->
+        <SolidColorBrush x:Key="BgCardBrush" Color="#101319"/>         <!-- panels / cards -->
+        <SolidColorBrush x:Key="BgInsetBrush" Color="#1A212C"/>        <!-- progress tracks, buttons -->
+        <SolidColorBrush x:Key="BgRailActiveBrush" Color="#151B24"/>   <!-- selected nav rail item -->
+        <SolidColorBrush x:Key="BgHoverBrush" Color="#131722"/>        <!-- row hover -->
+
+        <!-- Borders -->
+        <SolidColorBrush x:Key="BorderSubtleBrush" Color="#23272F"/>   <!-- panel / outer border -->
+        <SolidColorBrush x:Key="BorderInnerBrush" Color="#191D26"/>    <!-- header dividers -->
+        <SolidColorBrush x:Key="BorderRowBrush" Color="#14181F"/>      <!-- list row dividers -->
+        <SolidColorBrush x:Key="BorderButtonBrush" Color="#2B333F"/>
+        <SolidColorBrush x:Key="BorderChipBrush" Color="#2F3744"/>
+
+        <!-- Text ramp (bright → faint) -->
+        <SolidColorBrush x:Key="TextBrightBrush" Color="#EEF1F5"/>
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#DFE3EA"/>
+        <SolidColorBrush x:Key="TextBodyBrush" Color="#C7CDD6"/>
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="#AAB1BE"/>
+        <SolidColorBrush x:Key="TextMutedBrush" Color="#8890A0"/>
+        <SolidColorBrush x:Key="TextLabelBrush" Color="#8F97A5"/>
+        <SolidColorBrush x:Key="TextDimBrush" Color="#7A828F"/>
+        <SolidColorBrush x:Key="TextFaintBrush" Color="#5B636F"/>
+        <SolidColorBrush x:Key="TextFainterBrush" Color="#4A515E"/>
+
+        <!-- Status colour (the only chromatic accents) -->
+        <SolidColorBrush x:Key="AccentBrush" Color="#46D17F"/>
+        <SolidColorBrush x:Key="AccentHoverBrush" Color="#5AD183"/>
+        <SolidColorBrush x:Key="SuccessBrush" Color="#46D17F"/>
+        <SolidColorBrush x:Key="WarningBrush" Color="#E6A13A"/>
+        <SolidColorBrush x:Key="DangerBrush" Color="#E5484D"/>
     </Application.Resources>
 
     <Application.Styles>

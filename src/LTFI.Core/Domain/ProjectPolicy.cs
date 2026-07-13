@@ -11,4 +11,7 @@ public static class ProjectPolicy
 
     /// <summary>An active project with no activity for this many days is considered stalled.</summary>
     public const int StaleAfterDays = 10;
+
+    /// <summary>Target focused hours per week; drives the Command Center "focus debt" meter.</summary>
+    public const double WeeklyFocusTargetHours = 15.0;
 }

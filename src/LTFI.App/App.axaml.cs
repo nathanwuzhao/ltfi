@@ -80,6 +80,7 @@ public partial class App : Application
         services.AddLogging(builder => builder.AddSerilog(dispose: false));
         services.AddLtfiInfrastructure();
 
+        services.AddSingleton<CommandCenterViewModel>();
         services.AddSingleton<TodayViewModel>();
         services.AddSingleton<ProjectsViewModel>();
         services.AddSingleton<TasksViewModel>();
