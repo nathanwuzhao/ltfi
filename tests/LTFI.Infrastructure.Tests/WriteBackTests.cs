@@ -209,7 +209,9 @@ public sealed class WriteBackTests : IDisposable
         Assert.Equal("Buy \"good\" coffee — dark", command.GetProperty("title").GetString());
         Assert.Equal("line 1\nline 2", command.GetProperty("notes").GetString());
         Assert.Equal("LTFI", command.GetProperty("list").GetString());
-        Assert.Equal("2026-10-10", command.GetProperty("dueDate").GetString()); // all-day → date only
+        Assert.Equal(due.ToString("yyyy-MM-dd'T'HH:mm:sszzz", System.Globalization.CultureInfo.InvariantCulture),
+            command.GetProperty("dueDate").GetString()); // always full ISO 8601, even at midnight
+        Assert.StartsWith("2026-10-10T00:00:00", command.GetProperty("dueDate").GetString());
         Assert.Equal("High", command.GetProperty("priority").GetString());
         Assert.All(command.EnumerateObject(), p => Assert.Equal(JsonValueKind.String, p.Value.ValueKind));
 

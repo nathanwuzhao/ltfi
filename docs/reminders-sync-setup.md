@@ -139,6 +139,8 @@ Shortcuts app → **+** → name it **LTFI Apply**.
 4. **Repeat with Each** item in `Commands`:
    1. **Get Dictionary Value** `op` from *Repeat Item* → Set Variable `Op`;
       **Get Dictionary Value** `url` → Set Variable `CmdURL`.
+      ⚠️ Tap the `Op` variable and set its type to **Rich Text**. Otherwise the **If** action
+      won't offer *is* `create` / `complete` (Dictionary values come through untyped).
    2. **Find the reminder by URL:** **Find Reminders** where **URL** *is* `CmdURL` (limit 1) →
       Set Variable `Match`.
       - If *Find Reminders* can't filter by URL on your iOS: **Find Reminders** (all, including
@@ -152,8 +154,8 @@ Shortcuts app → **+** → name it **LTFI Apply**.
             and pass the name), Notes = `notes`, URL = `CmdURL`, Priority = `priority`.
             - Due date: **If** `dueDate` *has any value* → **Get Dates from Input** (`dueDate`)
               → set it as the reminder's Due Date (use **Edit Reminder → Due Date** on the new
-              reminder if *Add New Reminder* won't take a variable date). An all-day task comes
-              as a date only (`2026-10-10`), a timed one as full ISO 8601.
+              reminder if *Add New Reminder* won't take a variable date). `dueDate` is always
+              full ISO 8601 with offset (`2026-10-10T00:00:00-04:00`); midnight means "that day".
          3. **End If** (already exists → nothing to do).
    4. **Otherwise, If** `Op` *is* `complete`:
       1. **If** `Match` **has any value** → **Edit Reminder** `Match` → set **Is Completed** to

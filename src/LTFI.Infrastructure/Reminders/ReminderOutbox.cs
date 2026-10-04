@@ -161,18 +161,12 @@ public sealed class ReminderOutbox(IDbContextFactory<LtfiDbContext> contextFacto
             ["priority"] = ReminderRules.ToApplePriority(task.Priority)
         });
 
-    /// <summary>ISO 8601; a local-midnight due date goes out date-only (an all-day reminder). Empty for none.</summary>
-    public static string FormatDue(DateTimeOffset? due)
-    {
-        if (due is not { } d)
-        {
-            return string.Empty;
-        }
-
-        return d.TimeOfDay == TimeSpan.Zero
-            ? d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
-            : d.ToString("yyyy-MM-dd'T'HH:mm:sszzz", CultureInfo.InvariantCulture);
-    }
+    /// <summary>
+    /// Always full ISO 8601 with offset (<c>2026-10-10T00:00:00-04:00</c>), so the Shortcut's
+    /// Get Dates From Input parses every value the same way. Empty for none.
+    /// </summary>
+    public static string FormatDue(DateTimeOffset? due) =>
+        due is { } d ? d.ToString("yyyy-MM-dd'T'HH:mm:sszzz", CultureInfo.InvariantCulture) : string.Empty;
 
     private static IEnumerable<KeyValuePair<string, string>> ReadPayload(string json)
     {
