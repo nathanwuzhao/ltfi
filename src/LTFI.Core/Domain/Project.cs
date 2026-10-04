@@ -49,7 +49,11 @@ public class Project
 
     /// <summary>
     /// Derived from task/subtask completion (not stored). Requires <see cref="Tasks"/> (and their
-    /// subtasks) to be loaded; the read services load them. Null when there are no countable tasks.
+    /// subtasks) to be loaded; the read services load them. Null when there are no countable tasks,
+    /// and always null for a standing project (it never completes).
     /// </summary>
-    public int? ProgressPercent => ProjectProgress.Calculate(Tasks);
+    public int? ProgressPercent => ProjectProgress.For(this);
+
+    /// <summary>False for standing projects, which have no progress percentage (derived, not stored).</summary>
+    public bool HasProgress => ProjectProgress.Tracks(this);
 }

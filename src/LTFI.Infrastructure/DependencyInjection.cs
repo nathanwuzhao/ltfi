@@ -38,6 +38,7 @@ public static class DependencyInjection
         services.AddSingleton<ICheckInSnoozeStore>(_ =>
             new JsonCheckInSnoozeStore(System.IO.Path.Combine(DbPaths.AppDataDirectory, "checkin-snooze.json")));
         services.AddSingleton<IReflectionService, ReflectionService>();
+        services.AddSingleton<ICommitmentService, CommitmentService>();
 
         // Optional LLM coach (plan §5.3). Registered unconditionally: with no key the provider just
         // reports IsConfigured=false, so the app always starts and the UI shows a setup hint.
@@ -53,6 +54,7 @@ public static class DependencyInjection
         services.AddSingleton(SettingsStore.Load());
         services.AddSingleton(sp => sp.GetRequiredService<LtfiSettings>().Reminders);
         services.AddSingleton(sp => sp.GetRequiredService<LtfiSettings>().Focus);
+        services.AddSingleton(sp => sp.GetRequiredService<LtfiSettings>().Sounds);
         // Write-back: outbox.json beside the export, applied by the iPhone's "LTFI Apply" Shortcut.
         services.AddSingleton<IReminderOutbox>(sp =>
         {

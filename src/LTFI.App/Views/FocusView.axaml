@@ -93,8 +93,13 @@
                     </Border>
                     <TextBlock Classes="faint" FontSize="10" Text="{Binding NsdrNextText}"/>
                     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
-                        <Button Classes="ghost" Content="OPEN AUDIO" IsVisible="{Binding HasNsdrAudio}"
-                                Command="{Binding OpenNsdrAudioCommand}"/>
+                        <StackPanel Orientation="Horizontal">
+                            <!-- local file: played in-app; http(s) link: opened in the browser -->
+                            <Button Classes="ghost" Content="{Binding NsdrAudioToggleText}" IsVisible="{Binding IsNsdrAudioLocal}"
+                                    Command="{Binding ToggleNsdrAudioCommand}"/>
+                            <Button Classes="ghost" Content="OPEN AUDIO" IsVisible="{Binding ShowOpenAudio}"
+                                    Command="{Binding OpenNsdrAudioCommand}"/>
+                        </StackPanel>
                         <Button Grid.Column="2" Classes="ghost" Content="{Binding NsdrStopText}"
                                 Command="{Binding StopNsdrCommand}"/>
                     </Grid>

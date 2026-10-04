@@ -13,14 +13,29 @@ public sealed class LtfiSettings
     public RemindersSettings Reminders { get; set; } = new();
 
     public FocusSettings Focus { get; set; } = new();
+
+    public SoundSettings Sounds { get; set; } = new();
+}
+
+/// <summary>In-app notification sounds (<c>"sounds"</c> in settings.json).</summary>
+public sealed class SoundSettings
+{
+    /// <summary>Master switch for the chimes (pomodoro, NSDR, sync pings). Does not affect NSDR audio.</summary>
+    public bool SoundsEnabled { get; set; } = true;
+
+    /// <summary>Playback volume 0–100 for chimes and in-app NSDR audio (best effort; clamped).</summary>
+    public int SoundVolume { get; set; } = 60;
+
+    /// <summary>Play a soft ping when a reminders sync brings changes from the iPhone.</summary>
+    public bool SyncPings { get; set; } = true;
 }
 
 public sealed class FocusSettings
 {
     /// <summary>
-    /// Optional guided NSDR audio: an http(s) link (opens in the browser) or an absolute path to a
-    /// local audio file (opens in the default player). When set, the NSDR panel shows an OPEN AUDIO
-    /// button. Null = on-screen guide only.
+    /// Optional guided NSDR audio: an http(s) link (the NSDR panel shows OPEN AUDIO, which opens it
+    /// in the browser) or an absolute path / file: URI to a local audio file (played in-app when an
+    /// NSDR starts, with a PLAY/PAUSE toggle). Null = on-screen guide only.
     /// </summary>
     public string? NsdrAudioUrl { get; set; }
 }

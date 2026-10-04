@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LTFI.Core.Abstractions;
 using LTFI.Core.Domain;
+using LTFI.Services.Audio;
 using Serilog;
 
 namespace LTFI.ViewModels;
@@ -32,6 +34,10 @@ public partial class RemindersPanelViewModel : ViewModelBase
 
     private readonly IReminderSyncService _sync;
     private readonly IReminderOutbox _outbox;
+    private readonly NotificationSounds _sounds;
+
+    /// <summary>Background sync calls so far; the first (app start-up) never pings.</summary>
+    private int _backgroundSyncs;
 
     /// <summary>Raised after a sync that changed local data, so the shell can refresh visible pages.</summary>
     public event EventHandler? Synced;
@@ -52,10 +58,11 @@ public partial class RemindersPanelViewModel : ViewModelBase
     [ObservableProperty] private string outboxText = string.Empty;
     [ObservableProperty] private string outboxError = string.Empty;
 
-    public RemindersPanelViewModel(IReminderSyncService sync, IReminderOutbox outbox)
+    public RemindersPanelViewModel(IReminderSyncService sync, IReminderOutbox outbox, NotificationSounds sounds)
     {
         _sync = sync;
         _outbox = outbox;
+        _sounds = sounds;
     }
 
     /// <summary>Re-reads status + open reminders from the DB (no file read).</summary>
@@ -91,12 +98,13 @@ public partial class RemindersPanelViewModel : ViewModelBase
     /// <summary>Called by the shell on start-up and every ~15s; only reads the file when it changed.</summary>
     public async Task SyncIfChangedAsync()
     {
+        var isStartup = Interlocked.Increment(ref _backgroundSyncs) == 1;
         try
         {
             var result = await _sync.SyncIfChangedAsync();
             if (result is not null)
             {
-                await AfterSyncAsync(result);
+                await AfterSyncAsync(result, allowPing: !isStartup);
             }
         }
         catch (Exception ex)
@@ -118,7 +126,7 @@ public partial class RemindersPanelViewModel : ViewModelBase
         {
             // Re-write outbox.json too (e.g. the iCloud folder appeared since the last attempt).
             await _outbox.FlushAsync();
-            await AfterSyncAsync(await _sync.SyncAsync());
+            await AfterSyncAsync(await _sync.SyncAsync(), allowPing: true);
         }
         catch (Exception ex)
         {
@@ -131,8 +139,20 @@ public partial class RemindersPanelViewModel : ViewModelBase
         }
     }
 
-    private async Task AfterSyncAsync(ReminderSyncResult result)
+    /// <summary>
+    /// True when the sync brought something from the iPhone worth a ping: new reminders,
+    /// completions, or LTFI write-back commands the export confirmed. Edits/removals stay quiet.
+    /// </summary>
+    internal static bool IsPingWorthy(ReminderSyncResult result) =>
+        result.Succeeded && result.Added + result.Completed + result.Confirmed > 0;
+
+    private async Task AfterSyncAsync(ReminderSyncResult result, bool allowPing)
     {
+        if (allowPing && IsPingWorthy(result))
+        {
+            _sounds.PlaySyncPing();
+        }
+
         if (result.Succeeded)
         {
             Log.Information(

@@ -25,20 +25,41 @@ public sealed class EvidenceService(IDbContextFactory<LtfiDbContext> contextFact
         await using var db = await _contextFactory.CreateDbContextAsync(cancellationToken);
 
         var evidence = await db.Evidence.AsNoTracking().ToListAsync(cancellationToken);
-        var titles = await db.Projects.AsNoTracking()
-            .Select(p => new { p.Id, p.Title })
-            .ToDictionaryAsync(p => p.Id, p => p.Title, cancellationToken);
+        var titles = await ProjectTitlesAsync(db, cancellationToken);
 
         return evidence
             .OrderByDescending(e => e.OccurredAt)
             .Take(limit)
-            .Select(e => new EvidenceLine(
-                e.Id, e.Type, e.Source, e.Title, e.Summary,
-                e.ProjectId,
-                e.ProjectId is { } pid && titles.TryGetValue(pid, out var title) ? title : null,
-                e.OccurredAt))
+            .Select(e => ToLine(e, titles))
             .ToList();
     }
+
+    public async Task<IReadOnlyList<EvidenceLine>> GetForDayAsync(
+        DateOnly day, CancellationToken cancellationToken = default)
+    {
+        await using var db = await _contextFactory.CreateDbContextAsync(cancellationToken);
+
+        var evidence = await db.Evidence.AsNoTracking().ToListAsync(cancellationToken);
+        var titles = await ProjectTitlesAsync(db, cancellationToken);
+
+        // Same local-day bucketing as the contribution graph, so a cell and its feed agree.
+        return evidence
+            .Where(e => DateOnly.FromDateTime(e.OccurredAt.LocalDateTime) == day)
+            .OrderByDescending(e => e.OccurredAt)
+            .Select(e => ToLine(e, titles))
+            .ToList();
+    }
+
+    private static Task<Dictionary<Guid, string>> ProjectTitlesAsync(LtfiDbContext db, CancellationToken cancellationToken) =>
+        db.Projects.AsNoTracking()
+            .Select(p => new { p.Id, p.Title })
+            .ToDictionaryAsync(p => p.Id, p => p.Title, cancellationToken);
+
+    private static EvidenceLine ToLine(EvidenceItem e, IReadOnlyDictionary<Guid, string> titles) =>
+        new(e.Id, e.Type, e.Source, e.Title, e.Summary,
+            e.ProjectId,
+            e.ProjectId is { } pid && titles.TryGetValue(pid, out var title) ? title : null,
+            e.OccurredAt);
 
     public async Task<IReadOnlyList<DayActivity>> GetDailyActivityAsync(
         int days, CancellationToken cancellationToken = default)

@@ -3,39 +3,30 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
+using LTFI.Infrastructure.Audio;
+using LTFI.Services.Audio;
 using Serilog;
 
 namespace LTFI.Services;
 
 /// <summary>
-/// Gets the user's attention when a pomodoro phase ends: a Windows system sound (beep elsewhere)
-/// and the main window brought forward. Best effort — any failure is logged, never thrown.
+/// Gets the user's attention when a pomodoro phase or NSDR ends: an LTFI chime (respecting the
+/// sound settings) and the main window brought forward. Best effort — failures are logged, never thrown.
 /// </summary>
-public static class AttentionAlert
+public sealed class AttentionAlert(NotificationSounds sounds)
 {
-    public static void Raise()
-    {
-        PlaySound();
-        Dispatcher.UIThread.Post(BringToFront);
-    }
-
-    private static void PlaySound()
+    public void Raise(Chime chime)
     {
         try
         {
-            if (OperatingSystem.IsWindows())
-            {
-                System.Media.SystemSounds.Exclamation.Play();
-            }
-            else
-            {
-                Console.Beep();
-            }
+            sounds.Play(chime);
         }
         catch (Exception ex)
         {
             Log.Warning(ex, "Attention sound failed");
         }
+
+        Dispatcher.UIThread.Post(BringToFront);
     }
 
     private static void BringToFront()

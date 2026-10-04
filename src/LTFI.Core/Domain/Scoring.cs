@@ -17,6 +17,7 @@ public static class EvidencePoints
         EvidenceType.FocusSessionCompleted => 5,
         EvidenceType.ReflectionSubmitted => 10,
         EvidenceType.NsdrCompleted => 3,
+        EvidenceType.CommitmentKept => 5,
         _ => 0
     };
 

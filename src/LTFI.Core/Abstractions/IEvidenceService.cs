@@ -31,6 +31,10 @@ public interface IEvidenceService
     /// <summary>Most recent evidence first, capped at <paramref name="limit"/>, with project titles.</summary>
     Task<IReadOnlyList<EvidenceLine>> GetRecentAsync(int limit = 40, CancellationToken cancellationToken = default);
 
+    /// <summary>All evidence that occurred on one <em>local</em> calendar day, most recent first, with
+    /// project titles (the contribution graph's click-a-day filter).</summary>
+    Task<IReadOnlyList<EvidenceLine>> GetForDayAsync(DateOnly day, CancellationToken cancellationToken = default);
+
     /// <summary>Per-day evidence counts across all sources for the trailing <paramref name="days"/> days
     /// (oldest first, one entry per day including zero-activity days).</summary>
     Task<IReadOnlyList<DayActivity>> GetDailyActivityAsync(int days, CancellationToken cancellationToken = default);

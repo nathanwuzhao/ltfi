@@ -9,9 +9,17 @@ namespace LTFI.Core.Domain;
 /// rather than a manually entered number. A task counts as fully done when Completed; a task
 /// with subtasks counts by the fraction of its subtasks completed; everything else counts as 0.
 /// Canceled tasks are excluded. Returns null when there are no countable tasks.
+/// A standing project (<see cref="Project.IsStanding"/>) never completes, so it has no progress at all.
 /// </summary>
 public static class ProjectProgress
 {
+    /// <summary>False for standing projects: they never finish, so a percentage is meaningless.</summary>
+    public static bool Tracks(Project project) => !project.IsStanding;
+
+    /// <summary>The project's progress, or null when it is standing or has no countable tasks.</summary>
+    public static int? For(Project project) =>
+        Tracks(project) ? Calculate(project.Tasks) : null;
+
     public static int? Calculate(IEnumerable<TaskItem> tasks)
     {
         var countable = tasks.Where(t => t.Status != TaskStatus.Canceled).ToList();

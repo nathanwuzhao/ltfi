@@ -116,6 +116,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         // Command Center's current-operation controls hand off to the Focus page.
         command.OpenFocusRequested += (_, _) => SelectedNav = _focusNav;
+        command.OpenCheckInRequested += (_, _) => SelectedNav = _checkInNav;
 
         // Submitting or snoozing the check-in lifts the gate (re-checked against the service).
         checkIn.GateCleared += (_, _) =>

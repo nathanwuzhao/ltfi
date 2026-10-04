@@ -9,6 +9,7 @@ using Serilog;
 using LTFI.Core.Abstractions;
 using LTFI.Infrastructure;
 using LTFI.Infrastructure.Persistence;
+using LTFI.Services.Audio;
 using LTFI.ViewModels;
 using LTFI.Views;
 
@@ -79,6 +80,7 @@ public partial class App : Application
 
         services.AddLogging(builder => builder.AddSerilog(dispose: false));
         services.AddLtfiInfrastructure();
+        services.AddLtfiAudio();
 
         services.AddSingleton<CommandCenterViewModel>();
         services.AddSingleton<RemindersPanelViewModel>();

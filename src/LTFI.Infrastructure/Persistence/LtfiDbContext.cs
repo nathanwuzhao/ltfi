@@ -19,6 +19,7 @@ public class LtfiDbContext(DbContextOptions<LtfiDbContext> options) : DbContext(
     public DbSet<ReflectionEntry> Reflections => Set<ReflectionEntry>();
     public DbSet<ProjectArea> Areas => Set<ProjectArea>();
     public DbSet<OutboxCommand> Outbox => Set<OutboxCommand>();
+    public DbSet<WeeklyCommitment> Commitments => Set<WeeklyCommitment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -30,6 +31,7 @@ public class LtfiDbContext(DbContextOptions<LtfiDbContext> options) : DbContext(
             e.Property(p => p.Status).HasConversion<string>();
             // Derived, not stored.
             e.Ignore(p => p.ProgressPercent);
+            e.Ignore(p => p.HasProgress);
             e.Ignore(p => p.IsArchived);
         });
 
@@ -100,6 +102,25 @@ public class LtfiDbContext(DbContextOptions<LtfiDbContext> options) : DbContext(
             e.Property(c => c.ExternalUrl).IsRequired();
             e.Property(c => c.PayloadJson).IsRequired();
             e.HasIndex(c => c.ExternalUrl);
+        });
+
+        modelBuilder.Entity<WeeklyCommitment>(e =>
+        {
+            e.ToTable("WeeklyCommitments");
+            e.Property(c => c.Text).IsRequired();
+            e.Property(c => c.Status).HasConversion<string>();
+            e.HasIndex(c => c.CheckInId);
+            e.HasIndex(c => c.WeekStart);
+
+            // Deleting the check-in removes its commitments; deleting a linked task just unlinks.
+            e.HasOne<ReflectionEntry>()
+                .WithMany()
+                .HasForeignKey(c => c.CheckInId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<TaskItem>()
+                .WithMany()
+                .HasForeignKey(c => c.LinkedTaskId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<TaskLabel>(e => e.Property(l => l.Name).IsRequired());

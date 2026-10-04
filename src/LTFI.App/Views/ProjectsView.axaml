@@ -48,6 +48,7 @@
                                 </Border>
                                 <ProgressBar Grid.Row="1" Grid.ColumnSpan="2"
                                              Margin="0,8,0,0" Height="4" Maximum="100" MinWidth="0"
+                                             IsVisible="{Binding HasProgress}"
                                              Value="{Binding ProgressPercent, TargetNullValue=0}"/>
                             </Grid>
                         </DataTemplate>
@@ -125,7 +126,11 @@
                     <!-- Progress is derived from task/subtask completion, not entered. -->
                     <StackPanel Spacing="6" IsVisible="{Binding !IsCreatingNew}">
                         <TextBlock Classes="section-header" Text="PROGRESS (FROM TASKS)"/>
-                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
+                                   IsVisible="{Binding !SelectedProject.HasProgress, FallbackValue=False}"
+                                   Text="Standing project — it never completes, so it has no progress."/>
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10"
+                              IsVisible="{Binding SelectedProject.HasProgress, FallbackValue=False}">
                             <ProgressBar Maximum="100" MinWidth="0"
                                          VerticalAlignment="Center"
                                          Value="{Binding SelectedProject.ProgressPercent, TargetNullValue=0}"/>

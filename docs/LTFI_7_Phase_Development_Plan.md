@@ -55,12 +55,14 @@ The long-term aesthetic goal is a dense, dark, operational-intelligence-style da
 | LLM coach backend + Review-page button | built, **on hold** (no paid OpenAI plan yet). Inert without a key; do not extend it until the owner unpauses it |
 | iCloud Reminders mirror | done on the LTFI side; **needs iCloud for Windows + the iPhone Shortcut** |
 | Reminders as the sole task source: areas, Life standing project, list → project/area, URL ids, write-back outbox (create + complete) | done on the LTFI side (2026-10-04, migration `AddAreasAndOutbox`); **needs the "stamp URLs" step in LTFI Export + the new "LTFI Apply" Shortcut** — see `reminders-sync-setup.md` |
+| Weekly commitments: Q5 as 3 structured rows linkable to reminders, auto-kept on completion (also via sync), Command Center checkbox, `CommitmentKept` evidence (5 pts), next-check-in review (kept / missed / carry over), v1 Q5 backfill | done (2026-10-04, migration `AddWeeklyCommitments`) — see `agent-notes/2026-10-04-commitments-graph-click.md` |
+| Graph polish: click a day → evidence feed filtered to that day | done (2026-10-04) |
+| Standing projects have no progress % (domain rule; bar/trend hidden) | done (2026-10-04) |
 
 ### Next (in order)
 
-1. **Make the check-in's commitments real (no LLM).** Show last week's Q5 commitments on the
-   Command Center, replacing the PREVIEW panel, and review them in the next check-in. Wiring
-   in the coach (Accept, Edit or Drop on its commitments) waits until the coach is unpaused.
+1. ~~**Make the check-in's commitments real (no LLM).**~~ — shipped 2026-10-04. Still waiting on
+   the coach being unpaused: Accept, Edit or Drop on its suggested commitments.
 2. **Minimal Settings page:** reminders file path, `standingProject` / `ltfiList` / `listMap`
    (list → project/area), OpenAI key and model, check-in day, and the policy constants.
 3. **Honest-core cleanup:**
@@ -68,7 +70,8 @@ The long-term aesthetic goal is a dense, dark, operational-intelligence-style da
    - rename the "NO EVIDENCE" risk to "NO OUTPUT"
    - drop the dead `TaskLabel` entity and `LastActiveAt`
    - fold Today into the Command Center, or restyle it to match
-4. **Graph polish:** click a day to see that day's evidence. A per-project filter.
+4. **Graph polish:** ~~click a day to see that day's evidence~~ (shipped 2026-10-04). Still
+   to do: a per-project filter.
 5. ~~**Reminders write-back**~~ — shipped 2026-10-04 as `outbox.json` + the "LTFI Apply"
    Shortcut (create + complete only). Editing title/due/list from LTFI is not planned.
 6. **Maybe later:** local `git log` evidence (feeds the graph), launch-on-login (so the gate

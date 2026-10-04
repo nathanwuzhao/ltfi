@@ -26,8 +26,51 @@
 
             <Grid ColumnDefinitions="2*,*" ColumnSpacing="8">
 
-                <!-- ==== LEFT: the questions ==== -->
-                <Border Classes="panel" VerticalAlignment="Top">
+                <!-- ==== LEFT: last week's commitments + the questions ==== -->
+                <StackPanel Spacing="8" VerticalAlignment="Top">
+
+                <!-- LAST WEEK'S COMMITMENTS: settle each (kept / missed / carry over) -->
+                <Border Classes="panel" IsVisible="{Binding HasPastCommitments}">
+                    <StackPanel>
+                        <Border Classes="panel-hd">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Classes="micro" Text="LAST WEEK'S COMMITMENTS"/>
+                                <TextBlock Grid.Column="1" Classes="micro-dim" Text="{Binding PastSummary}"/>
+                            </Grid>
+                        </Border>
+                        <ItemsControl ItemsSource="{Binding PastCommitments}" Margin="0,4">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:PastCommitment">
+                                    <Border Padding="12,7" BorderBrush="{DynamicResource BorderRowBrush}" BorderThickness="0,0,0,1">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Spacing="2" VerticalAlignment="Center" Margin="0,0,10,0">
+                                                <TextBlock Classes="bright" FontSize="11.5" TextWrapping="Wrap" Text="{Binding Text}"/>
+                                                <TextBlock Classes="dim" FontSize="9.5" TextTrimming="CharacterEllipsis" Text="{Binding Meta}"
+                                                           IsVisible="{Binding Meta, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="1" FontSize="10" FontWeight="SemiBold" LetterSpacing="0.6" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource SuccessBrush}" Text="{Binding KeptLabel}"
+                                                       IsVisible="{Binding IsAlreadyKept}"/>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center"
+                                                        IsVisible="{Binding NeedsChoice}">
+                                                <Button Classes="seg" Classes.selected="{Binding IsKeptChoice}" Padding="8,4" FontSize="9.5"
+                                                        Content="KEPT" Command="{Binding ChooseKeptCommand}"/>
+                                                <Button Classes="seg" Classes.selected="{Binding IsMissedChoice}" Padding="8,4" FontSize="9.5"
+                                                        Content="MISSED" Command="{Binding ChooseMissedCommand}"/>
+                                                <Button Classes="seg" Classes.selected="{Binding IsCarryChoice}" Padding="8,4" FontSize="9.5"
+                                                        Content="CARRY OVER" Command="{Binding ChooseCarryCommand}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Classes="faint" FontSize="9.5" Margin="12,2,12,10" TextWrapping="Wrap"
+                                   Text="Anything left unchosen counts as missed when you submit. Carry over copies it into this week's commitments below."/>
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="panel">
                     <StackPanel>
                         <Border Classes="panel-hd">
                             <Grid ColumnDefinitions="*,Auto">
@@ -40,14 +83,61 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="vm:CheckInQuestion">
                                     <StackPanel Spacing="5" Margin="0,0,0,12">
-                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                        <Grid ColumnDefinitions="Auto,*">
                                             <TextBlock Classes="num faint" FontSize="10.5" FontWeight="Bold"
                                                        Margin="0,0,10,0" Text="{Binding Number}"/>
                                             <TextBlock Grid.Column="1" Classes="bright" FontSize="11.5"
                                                        TextWrapping="Wrap" Text="{Binding Prompt}"/>
-                                            <TextBlock Grid.Column="2" Classes="micro-dim" Margin="8,0,0,0"
-                                                       Foreground="{DynamicResource WarningBrush}"
-                                                       Text="{Binding RequiredMark}"/>
+                                        </Grid>
+                                        <TextBox Text="{Binding Answer, Mode=TwoWay}"
+                                                 AcceptsReturn="True" TextWrapping="Wrap"
+                                                 MinHeight="54" FontSize="11.5"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Q5: three structured commitment rows, each optionally linked to a reminder -->
+                        <StackPanel Spacing="5" Margin="12,0,12,12">
+                            <Grid ColumnDefinitions="Auto,*,Auto">
+                                <TextBlock Classes="num faint" FontSize="10.5" FontWeight="Bold"
+                                           Margin="0,0,10,0" Text="{Binding CommitmentsNumber}"/>
+                                <TextBlock Grid.Column="1" Classes="bright" FontSize="11.5"
+                                           TextWrapping="Wrap" Text="{Binding CommitmentsPrompt}"/>
+                                <TextBlock Grid.Column="2" Classes="micro-dim" Margin="8,0,0,0"
+                                           Foreground="{DynamicResource WarningBrush}" Text="AT LEAST 1"/>
+                            </Grid>
+                            <ItemsControl ItemsSource="{Binding CommitmentInputs}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:CommitmentInput">
+                                        <Grid ColumnDefinitions="18,*,8,240" Margin="0,0,0,5">
+                                            <TextBlock Classes="num dim" FontSize="10.5" VerticalAlignment="Center" Text="{Binding Number}"/>
+                                            <TextBox Grid.Column="1" FontSize="11.5" Text="{Binding Text, Mode=TwoWay}"
+                                                     PlaceholderText="commitment — with a first step under 10 minutes"/>
+                                            <ComboBox Grid.Column="3" FontSize="10.5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                                      ItemsSource="{Binding LinkOptions}" SelectedItem="{Binding SelectedLink, Mode=TwoWay}"
+                                                      ToolTip.Tip="Link to an open reminder: completing it keeps this commitment automatically">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:LinkOption">
+                                                        <TextBlock FontSize="10.5" TextTrimming="CharacterEllipsis" Text="{Binding Label}"/>
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <ItemsControl ItemsSource="{Binding QuestionsAfter}" Margin="12,0,12,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:CheckInQuestion">
+                                    <StackPanel Spacing="5" Margin="0,0,0,12">
+                                        <Grid ColumnDefinitions="Auto,*">
+                                            <TextBlock Classes="num faint" FontSize="10.5" FontWeight="Bold"
+                                                       Margin="0,0,10,0" Text="{Binding Number}"/>
+                                            <TextBlock Grid.Column="1" Classes="bright" FontSize="11.5"
+                                                       TextWrapping="Wrap" Text="{Binding Prompt}"/>
                                         </Grid>
                                         <TextBox Text="{Binding Answer, Mode=TwoWay}"
                                                  AcceptsReturn="True" TextWrapping="Wrap"
@@ -70,6 +160,7 @@
                         </Border>
                     </StackPanel>
                 </Border>
+                </StackPanel>
 
                 <!-- ==== RIGHT: context + history ==== -->
                 <StackPanel Grid.Column="1" Spacing="8">

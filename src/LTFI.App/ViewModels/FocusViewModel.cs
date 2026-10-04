@@ -9,8 +9,11 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LTFI.Core.Abstractions;
 using LTFI.Core.Domain;
+using LTFI.Infrastructure.Audio;
 using LTFI.Infrastructure.Settings;
 using LTFI.Services;
+using LTFI.Services.Audio;
+using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using TaskStatus = LTFI.Core.Domain.TaskStatus;
 
@@ -33,7 +36,16 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
     private readonly IProjectService _projectService;
     private readonly ITaskService _taskService;
     private readonly FocusSettings _settings;
+    private readonly AttentionAlert _alert;
+    private readonly IAudioPlayer _audio;
+    private readonly NotificationSounds _sounds;
     private readonly DispatcherTimer _timer;
+
+    /// <summary>The NSDR run the audio state belongs to is live (edge-detects NSDR start/end).</summary>
+    private bool _nsdrAudioSession;
+
+    /// <summary>The local NSDR track for the current run; null = none (or an http(s) link).</summary>
+    private string? _nsdrAudioPath;
 
     private Guid? _pendingProjectId;
     private Guid? _pendingTaskId;
@@ -100,6 +112,16 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
 
     public bool HasNsdrAudio => !string.IsNullOrWhiteSpace(_settings.NsdrAudioUrl);
 
+    /// <summary>nsdrAudioUrl is an existing local file: played in-app with a PLAY/PAUSE toggle.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowOpenAudio))]
+    private bool isNsdrAudioLocal;
+
+    [ObservableProperty] private string nsdrAudioToggleText = "PLAY AUDIO";
+
+    /// <summary>OPEN AUDIO for an http(s) link (or a bad path, which then explains itself).</summary>
+    public bool ShowOpenAudio => HasNsdrAudio && !IsNsdrAudioLocal;
+
     // --- review ---
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowSetup), nameof(ShowActive), nameof(ShowReview), nameof(ShowNsdr))]
@@ -118,7 +140,10 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
         INsdrService nsdr,
         IProjectService projectService,
         ITaskService taskService,
-        FocusSettings settings)
+        FocusSettings settings,
+        AttentionAlert alert,
+        [FromKeyedServices(AudioPlayers.Ambient)] IAudioPlayer audio,
+        NotificationSounds sounds)
     {
         _focus = focus;
         _pomodoro = pomodoro;
@@ -126,6 +151,12 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
         _projectService = projectService;
         _taskService = taskService;
         _settings = settings;
+        _alert = alert;
+        _audio = audio;
+        _sounds = sounds;
+
+        // The track ending before 10:00 just ends; the toggle offers to play it again.
+        _audio.PlaybackFinished += (_, _) => UpdateNsdrAudioText();
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += async (_, _) => await TickAsync();
@@ -323,6 +354,31 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
         }
     }
 
+    /// <summary>PLAY/PAUSE for a local NSDR track (from the top again once it has ended).</summary>
+    [RelayCommand]
+    private async Task ToggleNsdrAudioAsync()
+    {
+        if (_nsdrAudioPath is null || !IsNsdrRunning)
+        {
+            return;
+        }
+
+        if (_audio.IsPlaying)
+        {
+            await _audio.PauseAsync();
+        }
+        else if (_audio.IsPaused)
+        {
+            await _audio.ResumeAsync();
+        }
+        else
+        {
+            await PlayNsdrTrackAsync(_nsdrAudioPath);
+        }
+
+        UpdateNsdrAudioText();
+    }
+
     [RelayCommand]
     private void OpenNsdrAudio()
     {
@@ -441,16 +497,28 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
         {
             if (!IsReviewing && _pomodoro.IsActive)
             {
+                var wasNsdr = _pomodoro.GetSnapshot() is { Phase: PomodoroPhase.Nsdr };
                 var transition = await _pomodoro.AdvanceAsync();
-                if (transition != PomodoroTransition.None)
+                switch (transition)
                 {
-                    AttentionAlert.Raise();
+                    case PomodoroTransition.WorkEnded:
+                        _alert.Raise(Chime.WorkDone);
+                        break;
+                    case PomodoroTransition.BreakEnded when wasNsdr:
+                        // 10:00 beat the track: stop it before the chime.
+                        EndNsdrAudio();
+                        _alert.Raise(Chime.NsdrDone);
+                        break;
+                    case PomodoroTransition.BreakEnded:
+                        _alert.Raise(Chime.BreakOver);
+                        break;
                 }
             }
             else if (_nsdr.IsRunning && !_pomodoro.IsActive && await _nsdr.CompleteIfDueAsync())
             {
                 FeedbackMessage = "NSDR complete — 10 minutes of deep rest logged (+3).";
-                AttentionAlert.Raise();
+                EndNsdrAudio();
+                _alert.Raise(Chime.NsdrDone);
             }
         }
         catch (Exception ex)
@@ -515,6 +583,17 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
         IsNsdrRunning = nsdr is not null;
         NsdrStopText = IsNsdrInPomodoro ? "END NSDR — START NEXT POMODORO" : "STOP (NOTHING RECORDED)";
 
+        // Every way an NSDR starts or ends (button, long break, stop, completion, abandon) passes
+        // through here, so the track follows the NSDR without per-command hooks.
+        if (nsdr is not null && !_nsdrAudioSession)
+        {
+            BeginNsdrAudio();
+        }
+        else if (nsdr is null && _nsdrAudioSession)
+        {
+            EndNsdrAudio();
+        }
+
         if (nsdr is null)
         {
             return;
@@ -528,6 +607,81 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
             ? $"NEXT AT {Format(next.At)} · {next.Title.ToUpperInvariant()}"
             : "LAST STEP";
         NsdrProgress = nsdr.Elapsed.TotalSeconds / Nsdr.Duration.TotalSeconds * 100;
+    }
+
+    /// <summary>An NSDR just started: auto-play the local track, if one is configured and exists.</summary>
+    private void BeginNsdrAudio()
+    {
+        _nsdrAudioSession = true;
+        _nsdrAudioPath = ResolveLocalAudioPath(_settings.NsdrAudioUrl);
+        IsNsdrAudioLocal = _nsdrAudioPath is not null;
+        if (_nsdrAudioPath is not null)
+        {
+            _ = PlayNsdrTrackAsync(_nsdrAudioPath);
+        }
+
+        UpdateNsdrAudioText();
+    }
+
+    /// <summary>The NSDR ended (stopped, completed or replaced): stop the track. Idempotent.</summary>
+    private void EndNsdrAudio()
+    {
+        if (!_nsdrAudioSession)
+        {
+            return;
+        }
+
+        _nsdrAudioSession = false;
+        if (_nsdrAudioPath is not null)
+        {
+            _ = _audio.StopAsync();
+        }
+
+        UpdateNsdrAudioText();
+    }
+
+    private async Task PlayNsdrTrackAsync(string path)
+    {
+        await _audio.SetVolumeAsync(_sounds.Volume);
+        // The NSDR may have been stopped while the volume call was in flight.
+        if (_nsdrAudioSession && _nsdrAudioPath == path)
+        {
+            await _audio.PlayAsync(path);
+        }
+
+        UpdateNsdrAudioText();
+    }
+
+    private void UpdateNsdrAudioText() =>
+        NsdrAudioToggleText = _audio.IsPlaying ? "PAUSE AUDIO" : _audio.IsPaused ? "RESUME AUDIO" : "PLAY AUDIO";
+
+    /// <summary>
+    /// The local file <paramref name="setting"/> names (absolute path or file: URI, env vars
+    /// expanded), if it exists; null for http(s) links, relative paths and missing files.
+    /// </summary>
+    private static string? ResolveLocalAudioPath(string? setting)
+    {
+        var raw = setting?.Trim().Trim('"');
+        if (string.IsNullOrEmpty(raw))
+        {
+            return null;
+        }
+
+        try
+        {
+            var expanded = Environment.ExpandEnvironmentVariables(raw);
+            if (Uri.TryCreate(expanded, UriKind.Absolute, out var uri))
+            {
+                return uri.IsFile && System.IO.File.Exists(uri.LocalPath) ? uri.LocalPath : null;
+            }
+
+            return System.IO.Path.IsPathFullyQualified(expanded) && System.IO.File.Exists(expanded) ? expanded : null;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Couldn't resolve focus.nsdrAudioUrl");
+            return null;
+        }
     }
 
     private static string BuildObjective(ActiveFocusSnapshot snapshot)

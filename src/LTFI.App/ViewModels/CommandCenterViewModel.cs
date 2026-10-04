@@ -19,8 +19,8 @@ namespace LTFI.ViewModels;
 /// <summary>
 /// The Command Center (design doc "1a" reflow grid): a dense, single-screen operational overview
 /// — current operation, focus debt, active projects, upcoming deadlines, evidence feed, weekly
-/// commitments, and a per-project progress trend. Every panel is wired to real local data; a few
-/// signals not yet modelled (weekly commitments) are clearly marked stand-ins.
+/// commitments, and a per-project progress trend. Every panel is wired to real local data.
+/// Clicking a contribution-graph day filters the evidence feed to that day.
 /// </summary>
 public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
 {
@@ -33,13 +33,18 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
     private readonly IReviewService _review;
     private readonly IEvidenceService _evidence;
     private readonly IInsightsService _insights;
+    private readonly ICommitmentService _commitments;
     private readonly DispatcherTimer _clock;
 
     private readonly Dictionary<Guid, string> _projectTitles = new();
     private Guid? _selectedProjectId;
+    private DateOnly? _selectedDay;
 
     /// <summary>Raised when the user asks to jump to the Focus page (start/finish a session).</summary>
     public event EventHandler? OpenFocusRequested;
+
+    /// <summary>Raised by the empty WEEKLY COMMITMENTS panel's button: open the Check-In page.</summary>
+    public event EventHandler? OpenCheckInRequested;
 
     public string Header => "Command Center";
 
@@ -83,11 +88,18 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
 
     // --- UPCOMING / EVIDENCE / COMMITMENTS labels ---
     [ObservableProperty] private string evidenceCountLabel = "0 EVENTS";
-    [ObservableProperty] private string commitProgress = "0 / 3";
+    [ObservableProperty] private bool hasDayFilter;
+    [ObservableProperty] private string evidenceEmptyText = string.Empty;
+    [ObservableProperty] private string commitProgress = "0 / 0";
+    [ObservableProperty] private bool hasCommitments;
     [ObservableProperty] private string activeLimitText = "0 / 4 LIMIT";
 
     // --- PROJECT PROGRESS ---
     [ObservableProperty] private bool hasProgressProject;
+
+    /// <summary>The PROJECT PROGRESS panel shows only for a selected project that tracks progress
+    /// (standing projects never complete, so they have none).</summary>
+    [ObservableProperty] private bool showProgressPanel;
     [ObservableProperty] private int progPct;
     [ObservableProperty] private string progName = string.Empty;
     [ObservableProperty] private string progDelta = string.Empty;
@@ -118,7 +130,8 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
         IMilestoneService milestoneService,
         IReviewService review,
         IEvidenceService evidence,
-        IInsightsService insights)
+        IInsightsService insights,
+        ICommitmentService commitments)
     {
         _focus = focus;
         _pomodoro = pomodoro;
@@ -129,6 +142,7 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
         _review = review;
         _evidence = evidence;
         _insights = insights;
+        _commitments = commitments;
 
         SyncCurrentOp();
         _clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -190,6 +204,58 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
     [RelayCommand]
     private async Task SelectProjectAsync(Guid id) => await LoadProgressAsync(id);
 
+    [RelayCommand]
+    private void OpenCheckIn() => OpenCheckInRequested?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>Marks an unlinked commitment kept (writes its evidence once), then reloads.</summary>
+    [RelayCommand]
+    private async Task KeepCommitmentAsync(Guid id)
+    {
+        try
+        {
+            await _commitments.KeepAsync(id);
+            await LoadCommitmentsAsync();
+            await LoadContributionsAsync();
+            await LoadEvidenceAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Keeping commitment {Id} failed", id);
+        }
+    }
+
+    /// <summary>Clicking a graph day selects it (feed filters to that day); clicking it again clears.</summary>
+    public async Task ToggleDayAsync(ContribCellRow cell)
+    {
+        if (!cell.IsClickable)
+        {
+            return;
+        }
+
+        _selectedDay = _selectedDay == cell.Day ? null : cell.Day;
+        MarkSelectedDay();
+        await LoadEvidenceAsync();
+    }
+
+    [RelayCommand]
+    private async Task ClearDayAsync()
+    {
+        _selectedDay = null;
+        MarkSelectedDay();
+        await LoadEvidenceAsync();
+    }
+
+    private void MarkSelectedDay()
+    {
+        foreach (var week in ContribWeeks)
+        {
+            foreach (var c in week.Cells)
+            {
+                c.IsSelected = c.IsClickable && c.Day == _selectedDay;
+            }
+        }
+    }
+
     public async Task RefreshAsync()
     {
         var projects = await _projectService.GetAllAsync();
@@ -230,6 +296,7 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
                 Code = Code(p.Title),
                 Name = p.Title,
                 Dot = riskBrush,
+                HasProgress = p.HasProgress,
                 Pct = pct,
                 BarValue = pct,
                 BarBrush = riskBrush,
@@ -238,7 +305,10 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
                 RiskBrush = riskBrush,
             };
             Projects.Add(row);
-            ProgressTabs.Add(row);
+            if (p.HasProgress)
+            {
+                ProgressTabs.Add(row);
+            }
         }
 
         // Standing projects (e.g. Life) are listed but don't use up the limit.
@@ -271,29 +341,16 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
         // --- UPCOMING DEADLINES ---
         await LoadDeadlinesAsync(projects);
 
-        // --- EVIDENCE FEED ---
-        var recent = await _evidence.GetRecentAsync(40);
-        Evidence.Clear();
-        foreach (var e in recent)
-        {
-            Evidence.Add(new EvidenceRow
-            {
-                Time = FormatEvidenceTime(e.OccurredAt),
-                Tag = TypeTag(e.Type),
-                TagBrush = TypeBrush(e.Type),
-                Project = e.ProjectTitle is { } t ? Code(t) : "—",
-                Text = e.Title,
-            });
-        }
-        EvidenceCountLabel = $"{recent.Count} EVENTS";
+        // --- EVIDENCE FEED (all recent, or the clicked graph day) ---
+        await LoadEvidenceAsync();
 
-        // --- WEEKLY COMMITMENTS (stand-in: top open tasks) ---
+        // --- WEEKLY COMMITMENTS ---
         await LoadCommitmentsAsync();
 
-        // --- PROJECT PROGRESS ---
+        // --- PROJECT PROGRESS (only projects that track progress; never standing ones) ---
         var target = _selectedProjectId is { } sel && active.Any(p => p.Id == sel)
             ? sel
-            : active.FirstOrDefault()?.Id;
+            : active.FirstOrDefault(p => p.HasProgress)?.Id;
         if (target is { } id)
         {
             await LoadProgressAsync(id);
@@ -301,6 +358,7 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
         else
         {
             HasProgressProject = false;
+            ShowProgressPanel = false;
         }
 
         SyncCurrentOp();
@@ -320,9 +378,22 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
                     ? CultureInfo.InvariantCulture.DateTimeFormat.GetAbbreviatedMonthName(m)
                     : string.Empty,
                 Cells = week.Days.Select(c => c.Kind == ContributionCellKind.Day
-                    ? new ContribCellRow { Color = HeatLevelBrush(c.Level), Tip = ContribTip(c) }
-                    : new ContribCellRow { Color = Brushes.Transparent, Tip = null }).ToList(),
+                    ? new ContribCellRow
+                    {
+                        Day = c.Day,
+                        IsClickable = true,
+                        IsSelected = c.Day == _selectedDay,
+                        Color = HeatLevelBrush(c.Level),
+                        Tip = ContribTip(c),
+                    }
+                    : new ContribCellRow { Day = c.Day, Color = Brushes.Transparent, Tip = null }).ToList(),
             });
+        }
+
+        // A selected day that scrolled out of the window is dropped.
+        if (_selectedDay is { } d && (d < graph.Start || d > graph.Today))
+        {
+            _selectedDay = null;
         }
 
         var s = graph.Stats;
@@ -386,30 +457,77 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
         }
     }
 
-    private async Task LoadCommitmentsAsync()
+    private async Task LoadEvidenceAsync()
     {
-        var tasks = await _taskService.GetAllAsync();
-        var open = tasks
-            .Where(t => t.Status is TaskStatus.Ready or TaskStatus.InProgress)
-            .OrderByDescending(t => t.Priority)
-            .ThenBy(t => t.DueAt ?? DateTimeOffset.MaxValue)
-            .Take(3)
-            .ToList();
+        IReadOnlyList<EvidenceLine> lines = _selectedDay is { } day
+            ? await _evidence.GetForDayAsync(day)
+            : await _evidence.GetRecentAsync(40);
 
-        Commitments.Clear();
-        foreach (var t in open)
+        Evidence.Clear();
+        foreach (var e in lines)
         {
-            var done = t.Status == TaskStatus.Completed;
-            Commitments.Add(new CommitRow
+            Evidence.Add(new EvidenceRow
             {
-                Mark = done ? "✓" : "○",
-                MarkBrush = done ? CcBrush.Green : CcBrush.Faint,
-                Text = t.Title,
-                TextBrush = done ? CcBrush.Dim : CcBrush.Body,
-                Project = t.ProjectId is { } pid && _projectTitles.TryGetValue(pid, out var pt) ? Code(pt) : "—",
+                Time = _selectedDay is null
+                    ? FormatEvidenceTime(e.OccurredAt)
+                    : e.OccurredAt.LocalDateTime.ToString("HH:mm", CultureInfo.InvariantCulture),
+                Tag = TypeTag(e.Type),
+                TagBrush = TypeBrush(e.Type),
+                Project = e.ProjectTitle is { } t ? Code(t) : "—",
+                Text = e.Title,
             });
         }
-        CommitProgress = $"0 / {open.Count}";
+
+        HasDayFilter = _selectedDay is not null;
+        if (_selectedDay is { } selected)
+        {
+            var pts = lines.Sum(l => EvidencePoints.ForContribution(l.Type));
+            EvidenceCountLabel = $"{selected.ToString("ddd MMM dd", CultureInfo.InvariantCulture).ToUpperInvariant()} · "
+                                 + $"{lines.Count} EVENT{(lines.Count == 1 ? "" : "S")} · {pts} PTS";
+            EvidenceEmptyText = "No evidence on this day.";
+        }
+        else
+        {
+            EvidenceCountLabel = $"{lines.Count} EVENTS";
+            EvidenceEmptyText = "No evidence yet. Complete a task or finish a focus session to log the first signal.";
+        }
+    }
+
+    private async Task LoadCommitmentsAsync()
+    {
+        var lines = await _commitments.GetCurrentWeekAsync();
+
+        Commitments.Clear();
+        foreach (var c in lines)
+        {
+            var meta = new List<string>();
+            if (c.LinkedArea is { Length: > 0 } area)
+            {
+                meta.Add($"#{area}");
+            }
+            if (c.LinkedDue is { } due)
+            {
+                meta.Add(due.ToLocalTime().ToString("MMM dd", CultureInfo.InvariantCulture).ToUpperInvariant());
+            }
+            if (c.IsLinked && meta.Count == 0)
+            {
+                meta.Add("reminder");
+            }
+
+            Commitments.Add(new CommitRow(c.Id)
+            {
+                Text = c.Text,
+                IsKept = c.IsKept,
+                IsLinked = c.IsLinked,
+                Meta = string.Join(" · ", meta),
+                LinkTip = c.IsLinked
+                    ? $"Linked to reminder “{c.LinkedTaskTitle ?? "?"}” — kept automatically when it's completed"
+                    : null,
+            });
+        }
+
+        HasCommitments = Commitments.Count > 0;
+        CommitProgress = $"{lines.Count(c => c.IsKept)} / {lines.Count} KEPT";
     }
 
     private async Task LoadProgressAsync(Guid projectId)
@@ -420,10 +538,26 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
         if (project is null)
         {
             HasProgressProject = false;
+            ShowProgressPanel = false;
+            return;
+        }
+
+        // Highlight the selected row / tab.
+        foreach (var r in Projects)
+        {
+            r.IsSelected = r.Id == projectId;
+        }
+
+        // A standing project never completes: no progress, so no trend panel.
+        if (!project.HasProgress)
+        {
+            HasProgressProject = false;
+            ShowProgressPanel = false;
             return;
         }
 
         HasProgressProject = true;
+        ShowProgressPanel = true;
         var pct = project.ProgressPercent ?? 0;
         var row = ProgressTabs.FirstOrDefault(r => r.Id == projectId);
         var brush = row?.RiskBrush ?? CcBrush.Green;
@@ -439,12 +573,6 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
             .OrderBy(m => m.SortOrder)
             .FirstOrDefault();
         ProgMilestone = next?.Title ?? "—";
-
-        // Highlight the selected row / tab.
-        foreach (var r in ProgressTabs)
-        {
-            r.IsSelected = r.Id == projectId;
-        }
 
         // Trend: cumulative evidence over 30 days, normalised to the current derived %.
         var daily30 = await _evidence.GetProjectDailyActivityAsync(projectId, 30);
@@ -628,12 +756,13 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
         EvidenceType.DistractionOverride => "OVERRIDE",
         EvidenceType.DistractionBlocked => "BLOCK",
         EvidenceType.NsdrCompleted => "NSDR",
+        EvidenceType.CommitmentKept => "KEPT",
         _ => "NOTE",
     };
 
     private static IBrush TypeBrush(EvidenceType type) => type switch
     {
-        EvidenceType.TaskCompleted or EvidenceType.SubtaskCompleted => CcBrush.Green,
+        EvidenceType.TaskCompleted or EvidenceType.SubtaskCompleted or EvidenceType.CommitmentKept => CcBrush.Green,
         EvidenceType.FocusSessionCompleted => CcBrush.Dim,
         EvidenceType.ReflectionSubmitted => CcBrush.Amber,
         EvidenceType.DistractionOverride or EvidenceType.DistractionBlocked => CcBrush.Red,
@@ -659,6 +788,9 @@ public partial class ProjectRow(Guid id) : ObservableObject
     public string Code { get; init; } = string.Empty;
     public string Name { get; init; } = string.Empty;
     public IBrush Dot { get; init; } = CcBrush.Dim;
+
+    /// <summary>False for standing projects: no bar and no %, a STANDING tag instead.</summary>
+    public bool HasProgress { get; init; } = true;
     public int Pct { get; init; }
     public string PctText => $"{Pct}%";
     public double BarValue { get; init; }
@@ -700,13 +832,22 @@ public sealed class DebtRow
     public IBrush NoteBrush { get; init; } = CcBrush.Dim;
 }
 
-public sealed class CommitRow
+/// <summary>One of this week's commitments on the Command Center.</summary>
+public sealed class CommitRow(Guid id)
 {
-    public string Mark { get; init; } = "○";
-    public IBrush MarkBrush { get; init; } = CcBrush.Faint;
+    public Guid Id { get; } = id;
     public string Text { get; init; } = string.Empty;
-    public IBrush TextBrush { get; init; } = CcBrush.Body;
-    public string Project { get; init; } = string.Empty;
+    public bool IsKept { get; init; }
+    public bool IsLinked { get; init; }
+
+    /// <summary>"#area · OCT 08" for a linked reminder; empty otherwise.</summary>
+    public string Meta { get; init; } = string.Empty;
+    public string? LinkTip { get; init; }
+
+    /// <summary>Unlinked, still-open commitments get a checkbox; linked ones keep themselves.</summary>
+    public bool CanCheck => !IsKept && !IsLinked;
+    public bool ShowLinkMark => IsLinked && !IsKept;
+    public bool IsOpen => !IsKept;
 }
 
 public sealed class HeatCell
@@ -721,11 +862,17 @@ public sealed class ContribWeekRow
     public IReadOnlyList<ContribCellRow> Cells { get; init; } = [];
 }
 
-/// <summary>One day square; padding/future cells are transparent with no tooltip.</summary>
-public sealed class ContribCellRow
+/// <summary>One day square; padding/future cells are transparent, unclickable and have no tooltip.</summary>
+public sealed partial class ContribCellRow : ObservableObject
 {
+    public DateOnly Day { get; init; }
     public IBrush Color { get; init; } = CcBrush.Heat0;
     public string? Tip { get; init; }
+
+    /// <summary>Only real in-window days can be clicked to filter the evidence feed.</summary>
+    public bool IsClickable { get; init; }
+
+    [ObservableProperty] private bool isSelected;
 }
 
 /// <summary>Frozen brushes matching the App.axaml palette, for computed visualisation colours.</summary>

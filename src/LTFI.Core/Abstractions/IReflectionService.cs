@@ -45,8 +45,22 @@ public interface IReflectionService
     /// Saves a weekly check-in (answers in <see cref="WeeklyCheckIn.Questions"/> order). The first
     /// check-in of a week also records a <see cref="EvidenceType.ReflectionSubmitted"/> evidence item.
     /// </summary>
+    /// <remarks>Free-text form: the commitments are split out of the Q5 answer (as v1 check-ins were).</remarks>
     Task<WeeklyCheckInRecord> SaveWeeklyCheckInAsync(
         IReadOnlyList<string?> answers, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Saves a weekly check-in with structured commitments (1–3 non-empty, each optionally linked to
+    /// an open task). Q5 in <paramref name="answers"/> is replaced by the commitments joined as text,
+    /// for history. <paramref name="resolutions"/> settles earlier weeks' Open commitments
+    /// (Kept / Missed); any Open earlier commitment not listed becomes Missed. Earlier Open
+    /// commitments from a previous check-in this same week are Dropped (superseded).
+    /// </summary>
+    Task<WeeklyCheckInRecord> SaveWeeklyCheckInAsync(
+        IReadOnlyList<string?> answers,
+        IReadOnlyList<CommitmentDraft> commitments,
+        IReadOnlyDictionary<Guid, CommitmentStatus>? resolutions = null,
+        CancellationToken cancellationToken = default);
 
     Task<WeeklyCheckInRecord?> GetLatestWeeklyCheckInAsync(CancellationToken cancellationToken = default);
 
