@@ -21,10 +21,10 @@
                     <StackPanel Spacing="6">
                         <TextBlock Classes="micro-dim" Text="TIMER"/>
                         <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                            <Button Classes="ghost" Classes.primary="{Binding IsPomodoroMode}"
+                            <Button Classes="seg" Classes.selected="{Binding IsPomodoroMode}"
                                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                     Content="POMODORO · 25 / 5" Command="{Binding UsePomodoroCommand}"/>
-                            <Button Grid.Column="1" Classes="ghost" Classes.primary="{Binding IsFreeMode}"
+                            <Button Grid.Column="1" Classes="seg" Classes.selected="{Binding IsFreeMode}"
                                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                     Content="FREE · COUNT UP" Command="{Binding UseFreeCommand}"/>
                         </Grid>
@@ -69,11 +69,7 @@
                     <!-- Standalone NSDR: no session needed -->
                     <Border BorderBrush="{DynamicResource BorderInnerBrush}" BorderThickness="0,1,0,0" Padding="0,12,0,0">
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                            <StackPanel Spacing="2" VerticalAlignment="Center">
-                                <TextBlock Classes="micro" Text="NON-SLEEP DEEP REST"/>
-                                <TextBlock Classes="faint" FontSize="10" TextWrapping="Wrap"
-                                           Text="Ten minutes lying still with a guided body scan. Finishing the full 10:00 logs evidence."/>
-                            </StackPanel>
+                            <TextBlock Classes="micro" Text="NON-SLEEP DEEP REST" VerticalAlignment="Center"/>
                             <Button Grid.Column="1" Classes="ghost" Content="NSDR 10:00" Command="{Binding StartNsdrCommand}"/>
                         </Grid>
                     </Border>

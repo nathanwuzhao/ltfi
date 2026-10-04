@@ -24,7 +24,7 @@
                 </Grid>
             </Border>
 
-            <Grid ColumnDefinitions="1.6*,*" ColumnSpacing="8">
+            <Grid ColumnDefinitions="2*,*" ColumnSpacing="8">
 
                 <!-- ==== LEFT: the questions ==== -->
                 <Border Classes="panel" VerticalAlignment="Top">

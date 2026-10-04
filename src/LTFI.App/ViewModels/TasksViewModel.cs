@@ -246,6 +246,53 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
 
     private bool CanDeleteTask() => SelectedTask is not null;
 
+    /// <summary>
+    /// The list row's checkbox: completes the task in one click via the same service path as the
+    /// editor (focus gate + outbox "complete"). Un-completing is only offered for local tasks — the
+    /// outbox has no "reopen" command, so a completed iCloud reminder stays completed.
+    /// </summary>
+    [RelayCommand]
+    private async Task ToggleCompleteAsync(TaskItem? task)
+    {
+        if (task is null)
+        {
+            return;
+        }
+
+        var wasCompleted = task.Status == TaskStatus.Completed;
+        string message;
+        try
+        {
+            if (wasCompleted)
+            {
+                if (task.IsExternal)
+                {
+                    message = "A completed iCloud reminder can't be re-opened from LTFI — un-tick it on your iPhone.";
+                }
+                else
+                {
+                    await _taskService.SetStatusAsync(task.Id, TaskStatus.Ready);
+                    message = $"\"{task.Title}\" re-opened.";
+                }
+            }
+            else
+            {
+                await _taskService.SetStatusAsync(task.Id, TaskStatus.Completed);
+                message = task.IsExternal
+                    ? $"\"{task.Title}\" completed — it is ticked off on your iPhone after the LTFI Apply Shortcut runs."
+                    : $"\"{task.Title}\" completed.";
+            }
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+        }
+
+        // Always reload: on failure this also resets the checkbox the click already toggled.
+        await RefreshAsync();
+        FeedbackMessage = message;
+    }
+
     [RelayCommand(CanExecute = nameof(CanManageSubtasks))]
     private async Task AddSubtaskAsync()
     {
@@ -410,16 +457,28 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
             return false;
         }
 
+        // Due is a date only: a newly chosen date is stored as local midnight; an unchanged date keeps
+        // the task's existing DueAt (including any time it already had).
         DateTimeOffset? dueAt = null;
-        if (!string.IsNullOrWhiteSpace(DraftDueDateText))
+        var dueText = DraftDueDateText?.Trim() ?? string.Empty;
+        if (dueText.Length > 0)
         {
-            if (!DateTimeOffset.TryParse(DraftDueDateText, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+            var existingDue = IsCreatingNew ? null : SelectedTask?.DueAt;
+            if (existingDue is { } existing
+                && dueText == existing.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))
+            {
+                dueAt = existing;
+            }
+            else if (DateTime.TryParse(dueText, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+            {
+                dueAt = new DateTimeOffset(DateTime.SpecifyKind(parsed.Date, DateTimeKind.Unspecified),
+                    TimeZoneInfo.Local.GetUtcOffset(parsed.Date));
+            }
+            else
             {
                 FeedbackMessage = "Due date must be empty or a valid date such as 2026-06-30.";
                 return false;
             }
-
-            dueAt = parsed;
         }
 
         int? requiredMinutes = null;

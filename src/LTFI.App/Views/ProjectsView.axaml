@@ -8,7 +8,7 @@
              x:DataType="vm:ProjectsViewModel"
              mc:Ignorable="d">
 
-    <Grid ColumnDefinitions="2*,3*" RowDefinitions="Auto,*" Margin="28">
+    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,*" Margin="28">
         <TextBlock Grid.ColumnSpan="2" Classes="page-title" Text="{Binding Header}"/>
 
         <!-- Project list -->
@@ -39,14 +39,15 @@
                                         <TextBlock Classes="faint" FontSize="11" VerticalAlignment="Center"
                                                    Text="STANDING" IsVisible="{Binding IsStanding}"/>
                                     </StackPanel>
-                                    <TextBlock Classes="muted" FontSize="12"
-                                               Text="{Binding Description, FallbackValue=''}"/>
+                                    <TextBlock Classes="muted" FontSize="12" TextTrimming="CharacterEllipsis"
+                                               Text="{Binding Description, FallbackValue=''}"
+                                               ToolTip.Tip="{Binding Description}"/>
                                 </StackPanel>
                                 <Border Grid.Column="1" Classes="chip">
                                     <TextBlock Text="{Binding Status}"/>
                                 </Border>
                                 <ProgressBar Grid.Row="1" Grid.ColumnSpan="2"
-                                             Margin="0,8,0,0" Height="4" Maximum="100"
+                                             Margin="0,8,0,0" Height="4" Maximum="100" MinWidth="0"
                                              Value="{Binding ProgressPercent, TargetNullValue=0}"/>
                             </Grid>
                         </DataTemplate>
@@ -125,7 +126,7 @@
                     <StackPanel Spacing="6" IsVisible="{Binding !IsCreatingNew}">
                         <TextBlock Classes="section-header" Text="PROGRESS (FROM TASKS)"/>
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                            <ProgressBar Maximum="100"
+                            <ProgressBar Maximum="100" MinWidth="0"
                                          VerticalAlignment="Center"
                                          Value="{Binding SelectedProject.ProgressPercent, TargetNullValue=0}"/>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">

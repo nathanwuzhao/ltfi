@@ -8,7 +8,7 @@
              x:DataType="vm:TasksViewModel"
              mc:Ignorable="d">
 
-    <Grid ColumnDefinitions="2*,3*" RowDefinitions="Auto,*" Margin="28">
+    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,*" Margin="28">
         <TextBlock Grid.ColumnSpan="2" Classes="page-title" Text="{Binding Header}"/>
 
         <!-- Task list -->
@@ -29,31 +29,48 @@
                 <ListBox Grid.Row="1"
                          Margin="0,14,0,0"
                          Background="Transparent"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                          ItemsSource="{Binding Tasks}"
                          SelectedItem="{Binding SelectedTask, Mode=TwoWay}">
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="domain:TaskItem">
-                            <Grid ColumnDefinitions="*,Auto" Margin="2">
-                                <StackPanel Spacing="3">
-                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <TextBlock Classes="muted" FontSize="12" Text="{Binding Priority}"/>
-                                        <TextBlock Classes="muted" FontSize="12" Text="·"/>
-                                        <TextBlock Classes="muted" FontSize="12"
-                                                   Text="{Binding TimeSpent, Converter={StaticResource DurationToClock}}"/>
-                                        <!-- Area tag (sub-division of the project) -->
+                            <!-- checkbox | info (takes the rest, trims) | status chips (auto width) -->
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10" Margin="2">
+                                <!-- One-click complete. A completed iCloud reminder can't be re-opened
+                                     from LTFI, so its box stays checked and disabled. -->
+                                <CheckBox VerticalAlignment="Center" MinWidth="0" Padding="0"
+                                          IsChecked="{Binding Status, Mode=OneWay, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static domain:TaskStatus.Completed}}"
+                                          Command="{ReflectionBinding $parent[UserControl].DataContext.ToggleCompleteCommand}"
+                                          CommandParameter="{Binding}"
+                                          ToolTip.Tip="Complete this task">
+                                    <CheckBox.IsEnabled>
+                                        <MultiBinding Converter="{x:Static BoolConverters.Or}">
+                                            <Binding Path="!IsExternal"/>
+                                            <Binding Path="Status" Converter="{x:Static ObjectConverters.NotEqual}"
+                                                     ConverterParameter="{x:Static domain:TaskStatus.Completed}"/>
+                                        </MultiBinding>
+                                    </CheckBox.IsEnabled>
+                                </CheckBox>
+                                <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    <WrapPanel Orientation="Horizontal">
+                                        <TextBlock Classes="muted" FontSize="12" Margin="0,0,8,0" Text="{Binding Priority}"/>
+                                        <TextBlock Classes="muted" FontSize="12" Margin="0,0,8,0"
+                                                   Text="{Binding TimeSpent, Converter={StaticResource DurationToClock}, StringFormat='· {0}'}"/>
+                                        <!-- Due date only (no time) -->
+                                        <TextBlock Classes="muted" FontSize="12" Margin="0,0,8,0"
+                                                   IsVisible="{Binding DueAt, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                   Text="{Binding DueAt, StringFormat='· due {0:yyyy-MM-dd}', FallbackValue=''}"/>
+                                        <!-- Area tag (sub-division of the project; also the iPhone list) -->
                                         <TextBlock Classes="muted" FontSize="12"
                                                    IsVisible="{Binding Area, Converter={x:Static ObjectConverters.IsNotNull}}"
                                                    Text="{Binding Area.Name, StringFormat='· #{0}', FallbackValue=''}"/>
-                                        <!-- Mirrored from iCloud Reminders -->
-                                        <TextBlock Classes="faint" FontSize="11" IsVisible="{Binding IsExternal}"
-                                                   Text="{Binding ExternalList, StringFormat='· iCLOUD {0}'}"/>
-                                    </StackPanel>
+                                    </WrapPanel>
                                 </StackPanel>
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                     <Border Classes="chip" IsVisible="{Binding IsPendingOnPhone}"
-                                            ToolTip.Tip="Waiting for the iPhone: the LTFI Apply Shortcut hasn't run, or the next export hasn't arrived yet">
-                                        <TextBlock Foreground="{DynamicResource WarningBrush}" Text="PENDING ON iPHONE"/>
+                                            ToolTip.Tip="Pending on iPhone: the LTFI Apply Shortcut hasn't run, or the next export hasn't arrived yet">
+                                        <TextBlock Foreground="{DynamicResource WarningBrush}" Text="PENDING"/>
                                     </Border>
                                     <Border Classes="chip">
                                         <TextBlock Text="{Binding Status}"/>

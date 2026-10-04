@@ -8,7 +8,8 @@
              x:DataType="vm:TodayViewModel"
              mc:Ignorable="d">
 
-    <Grid ColumnDefinitions="3*,2*" Margin="28">
+    <!-- Due-today | Reminders split evenly (was 3*,2*: the task list dwarfed the upcoming side). -->
+    <Grid ColumnDefinitions="*,*" Margin="28">
         <Grid RowDefinitions="Auto,Auto,Auto,Auto,*">
             <TextBlock Classes="page-title" Text="{Binding Header}"/>
             <TextBlock Grid.Row="1" Classes="muted" Margin="0,6,0,14" Text="{Binding SummaryText}"/>
