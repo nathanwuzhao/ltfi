@@ -11,6 +11,18 @@ namespace LTFI.Infrastructure.Settings;
 public sealed class LtfiSettings
 {
     public RemindersSettings Reminders { get; set; } = new();
+
+    public FocusSettings Focus { get; set; } = new();
+}
+
+public sealed class FocusSettings
+{
+    /// <summary>
+    /// Optional guided NSDR audio: an http(s) link (opens in the browser) or an absolute path to a
+    /// local audio file (opens in the default player). When set, the NSDR panel shows an OPEN AUDIO
+    /// button. Null = on-screen guide only.
+    /// </summary>
+    public string? NsdrAudioUrl { get; set; }
 }
 
 public sealed class RemindersSettings

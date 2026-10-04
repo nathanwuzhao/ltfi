@@ -32,4 +32,7 @@ public class FocusSession
     public string? BlockerSummary { get; set; }
 
     public string? NextAction { get; set; }
+
+    /// <summary>Pomodoro work intervals completed in this session (0 for free-timed sessions).</summary>
+    public int PomodorosCompleted { get; set; }
 }

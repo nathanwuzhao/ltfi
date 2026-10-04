@@ -13,9 +13,12 @@ namespace LTFI.Infrastructure.Services;
 /// Owns the single active focus session. Registered as a singleton so the in-memory elapsed
 /// timer survives view navigation; the session row is persisted on pause and finish.
 /// </summary>
-public sealed class FocusSessionService(IDbContextFactory<LtfiDbContext> contextFactory) : IFocusSessionService
+public sealed class FocusSessionService(
+    IDbContextFactory<LtfiDbContext> contextFactory,
+    TimeProvider? timeProvider = null) : IFocusSessionService
 {
     private readonly IDbContextFactory<LtfiDbContext> _contextFactory = contextFactory;
+    private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
     private readonly object _gate = new();
 
     // In-memory state for the active session.
@@ -27,6 +30,7 @@ public sealed class FocusSessionService(IDbContextFactory<LtfiDbContext> context
     private FocusSessionStatus _status;
     private TimeSpan _accumulated;        // active time banked before the current running segment
     private DateTimeOffset? _runningSince; // start of the current running segment; null when paused
+    private int _pomodoros;                // pomodoro work intervals completed this session
 
     public bool HasActiveSession
     {
@@ -43,7 +47,7 @@ public sealed class FocusSessionService(IDbContextFactory<LtfiDbContext> context
             }
 
             return new ActiveFocusSnapshot(
-                _activeId.Value, _projectId, _taskId, _taskTitle, _intent, _status, ElapsedNoLock());
+                _activeId.Value, _projectId, _taskId, _taskTitle, _intent, _status, ElapsedNoLock(), _pomodoros);
         }
     }
 
@@ -57,7 +61,7 @@ public sealed class FocusSessionService(IDbContextFactory<LtfiDbContext> context
             }
         }
 
-        var now = DateTimeOffset.Now;
+        var now = _time.GetLocalNow();
         var session = new FocusSession
         {
             ProjectId = projectId,
@@ -99,6 +103,7 @@ public sealed class FocusSessionService(IDbContextFactory<LtfiDbContext> context
             _status = FocusSessionStatus.Active;
             _accumulated = TimeSpan.Zero;
             _runningSince = now;
+            _pomodoros = 0;
         }
 
         return session;
@@ -108,6 +113,7 @@ public sealed class FocusSessionService(IDbContextFactory<LtfiDbContext> context
     {
         Guid id;
         TimeSpan banked;
+        int pomodoros;
         lock (_gate)
         {
             if (_activeId is null || _status != FocusSessionStatus.Active)
@@ -120,12 +126,47 @@ public sealed class FocusSessionService(IDbContextFactory<LtfiDbContext> context
             _status = FocusSessionStatus.Paused;
             id = _activeId.Value;
             banked = _accumulated;
+            pomodoros = _pomodoros;
         }
 
         await PersistAsync(id, s =>
         {
             s.Duration = banked;
             s.Status = FocusSessionStatus.Paused;
+            s.PomodorosCompleted = pomodoros;
+        }, cancellationToken);
+    }
+
+    public async Task CompletePomodoroAsync(CancellationToken cancellationToken = default)
+    {
+        Guid id;
+        TimeSpan banked;
+        int pomodoros;
+        lock (_gate)
+        {
+            if (_activeId is null)
+            {
+                return;
+            }
+
+            if (_status == FocusSessionStatus.Active)
+            {
+                _accumulated = ElapsedNoLock();
+                _runningSince = null;
+                _status = FocusSessionStatus.Paused;
+            }
+
+            _pomodoros++;
+            id = _activeId.Value;
+            banked = _accumulated;
+            pomodoros = _pomodoros;
+        }
+
+        await PersistAsync(id, s =>
+        {
+            s.Duration = banked;
+            s.Status = FocusSessionStatus.Paused;
+            s.PomodorosCompleted = pomodoros;
         }, cancellationToken);
     }
 
@@ -139,7 +180,7 @@ public sealed class FocusSessionService(IDbContextFactory<LtfiDbContext> context
                 return;
             }
 
-            _runningSince = DateTimeOffset.Now;
+            _runningSince = _time.GetLocalNow();
             _status = FocusSessionStatus.Active;
             id = _activeId.Value;
         }
@@ -159,6 +200,7 @@ public sealed class FocusSessionService(IDbContextFactory<LtfiDbContext> context
         Guid? projectId;
         Guid? taskId;
         string? intent;
+        int pomodoros;
         lock (_gate)
         {
             if (_activeId is null)
@@ -171,9 +213,10 @@ public sealed class FocusSessionService(IDbContextFactory<LtfiDbContext> context
             projectId = _projectId;
             taskId = _taskId;
             intent = _intent;
+            pomodoros = _pomodoros;
         }
 
-        var now = DateTimeOffset.Now;
+        var now = _time.GetLocalNow();
 
         await using var db = await _contextFactory.CreateDbContextAsync(cancellationToken);
         var session = await db.FocusSessions.FirstOrDefaultAsync(s => s.Id == id, cancellationToken)
@@ -186,6 +229,7 @@ public sealed class FocusSessionService(IDbContextFactory<LtfiDbContext> context
         session.ResultSummary = Normalize(resultSummary);
         session.BlockerSummary = Normalize(blockerSummary);
         session.NextAction = Normalize(nextAction);
+        session.PomodorosCompleted = pomodoros;
 
         db.Evidence.Add(new EvidenceItem
         {
@@ -208,6 +252,7 @@ public sealed class FocusSessionService(IDbContextFactory<LtfiDbContext> context
     {
         Guid id;
         TimeSpan elapsed;
+        int pomodoros;
         lock (_gate)
         {
             if (_activeId is null)
@@ -217,13 +262,16 @@ public sealed class FocusSessionService(IDbContextFactory<LtfiDbContext> context
 
             elapsed = ElapsedNoLock();
             id = _activeId.Value;
+            pomodoros = _pomodoros;
         }
 
+        var now = _time.GetLocalNow();
         await PersistAsync(id, s =>
         {
             s.Duration = elapsed;
-            s.EndedAt = DateTimeOffset.Now;
+            s.EndedAt = now;
             s.Status = FocusSessionStatus.Abandoned;
+            s.PomodorosCompleted = pomodoros;
         }, cancellationToken);
 
         ClearActive();
@@ -241,7 +289,7 @@ public sealed class FocusSessionService(IDbContextFactory<LtfiDbContext> context
             return;
         }
 
-        var now = DateTimeOffset.Now;
+        var now = _time.GetLocalNow();
         foreach (var session in dangling)
         {
             session.Status = FocusSessionStatus.Abandoned;
@@ -252,7 +300,7 @@ public sealed class FocusSessionService(IDbContextFactory<LtfiDbContext> context
     }
 
     private TimeSpan ElapsedNoLock() =>
-        _accumulated + (_runningSince is { } since ? DateTimeOffset.Now - since : TimeSpan.Zero);
+        _accumulated + (_runningSince is { } since ? _time.GetLocalNow() - since : TimeSpan.Zero);
 
     private void ClearActive()
     {
@@ -265,6 +313,7 @@ public sealed class FocusSessionService(IDbContextFactory<LtfiDbContext> context
             _intent = null;
             _accumulated = TimeSpan.Zero;
             _runningSince = null;
+            _pomodoros = 0;
         }
     }
 

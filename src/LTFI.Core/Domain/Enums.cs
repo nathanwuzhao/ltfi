@@ -74,7 +74,9 @@ public enum EvidenceType
     ReflectionSubmitted,
     DistractionBlocked,
     DistractionOverride,
-    CalendarEventCompleted
+    CalendarEventCompleted,
+    /// <summary>A full 10-minute NSDR (non-sleep deep rest) was completed; stopping early records nothing.</summary>
+    NsdrCompleted
 }
 
 /// <summary>What a <see cref="ReflectionEntry"/> is scoped to (plan §5 ScopeType).</summary>

@@ -19,6 +19,20 @@
                     <TextBlock Classes="section-header" Text="START A FOCUS SESSION"/>
 
                     <StackPanel Spacing="6">
+                        <TextBlock Classes="micro-dim" Text="TIMER"/>
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                            <Button Classes="ghost" Classes.primary="{Binding IsPomodoroMode}"
+                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                    Content="POMODORO · 25 / 5" Command="{Binding UsePomodoroCommand}"/>
+                            <Button Grid.Column="1" Classes="ghost" Classes.primary="{Binding IsFreeMode}"
+                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                    Content="FREE · COUNT UP" Command="{Binding UseFreeCommand}"/>
+                        </Grid>
+                        <TextBlock Classes="faint" FontSize="10" TextWrapping="Wrap" IsVisible="{Binding IsPomodoroMode}"
+                                   Text="25:00 work, 5:00 break, 15:00 long break after every 4th. Only work time counts toward the session."/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
                         <TextBlock Classes="muted" Text="Project"/>
                         <ComboBox HorizontalAlignment="Stretch"
                                   ItemsSource="{Binding ProjectOptions}"
@@ -51,18 +65,97 @@
                     </StackPanel>
 
                     <Button Classes="primary" Content="Start session" Command="{Binding StartCommand}"/>
+
+                    <!-- Standalone NSDR: no session needed -->
+                    <Border BorderBrush="{DynamicResource BorderInnerBrush}" BorderThickness="0,1,0,0" Padding="0,12,0,0">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <StackPanel Spacing="2" VerticalAlignment="Center">
+                                <TextBlock Classes="micro" Text="NON-SLEEP DEEP REST"/>
+                                <TextBlock Classes="faint" FontSize="10" TextWrapping="Wrap"
+                                           Text="Ten minutes lying still with a guided body scan. Finishing the full 10:00 logs evidence."/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Classes="ghost" Content="NSDR 10:00" Command="{Binding StartNsdrCommand}"/>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+
+                <!-- NSDR: calm countdown + timed guide -->
+                <StackPanel Spacing="14" IsVisible="{Binding ShowNsdr}">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Classes="micro" Text="NSDR · NON-SLEEP DEEP REST" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="1" Classes="micro-dim" Text="{Binding NsdrStepText}" VerticalAlignment="Center"/>
+                    </Grid>
+                    <TextBlock Classes="num" Text="{Binding NsdrCountdownText}"
+                               FontSize="56" FontWeight="SemiBold" HorizontalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <ProgressBar Classes="meter" Value="{Binding NsdrProgress}" Foreground="{DynamicResource TextDimBrush}"/>
+                    <Border Background="{DynamicResource BgInsetBrush}" CornerRadius="4" Padding="16,14">
+                        <StackPanel Spacing="8">
+                            <TextBlock Classes="bright" FontSize="15" Text="{Binding NsdrCueTitle}"/>
+                            <TextBlock Classes="muted" FontSize="13" LineHeight="20" TextWrapping="Wrap" Text="{Binding NsdrCueText}"/>
+                        </StackPanel>
+                    </Border>
+                    <TextBlock Classes="faint" FontSize="10" Text="{Binding NsdrNextText}"/>
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                        <Button Classes="ghost" Content="OPEN AUDIO" IsVisible="{Binding HasNsdrAudio}"
+                                Command="{Binding OpenNsdrAudioCommand}"/>
+                        <Button Grid.Column="2" Classes="ghost" Content="{Binding NsdrStopText}"
+                                Command="{Binding StopNsdrCommand}"/>
+                    </Grid>
                 </StackPanel>
 
                 <!-- Active: the running timer -->
                 <StackPanel Spacing="16" IsVisible="{Binding ShowActive}">
                     <TextBlock Classes="section-header" Text="CURRENT OPERATION"/>
                     <TextBlock Text="{Binding CurrentObjective}" FontSize="16" TextWrapping="Wrap"/>
-                    <TextBlock Text="{Binding ElapsedText}"
+
+                    <!-- Free mode: count up -->
+                    <TextBlock Text="{Binding ElapsedText}" IsVisible="{Binding ShowFreeTimer}"
                                FontSize="56" FontWeight="SemiBold"
                                HorizontalAlignment="Center"
                                Foreground="{DynamicResource AccentBrush}"/>
+
+                    <!-- Pomodoro mode: phase countdown -->
+                    <StackPanel Spacing="10" IsVisible="{Binding IsPomodoroActive}">
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{Binding PhaseBrush}"/>
+                                <TextBlock Classes="micro" Text="{Binding PhaseLabel}" Foreground="{Binding PhaseBrush}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <TextBlock Grid.Column="2" Classes="micro-dim" Text="{Binding PomodorosText}" VerticalAlignment="Center"/>
+                        </Grid>
+                        <TextBlock Classes="num" Text="{Binding CountdownText}"
+                                   FontSize="56" FontWeight="SemiBold" HorizontalAlignment="Center"
+                                   Foreground="{Binding PhaseBrush}"/>
+                        <TextBlock Text="{Binding PomodoroDots}" FontSize="18" LetterSpacing="4"
+                                   HorizontalAlignment="Center" Foreground="{DynamicResource TextDimBrush}"/>
+                        <TextBlock Classes="dim" FontSize="10" HorizontalAlignment="Center">
+                            <TextBlock.Text><Binding Path="ElapsedText" StringFormat="WORK TIME THIS SESSION {0}"/></TextBlock.Text>
+                        </TextBlock>
+
+                        <!-- break running: skip, or swap a long break for NSDR -->
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10" IsVisible="{Binding IsBreakRunning}">
+                            <Button Classes="ghost" Content="SKIP BREAK"
+                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                    Command="{Binding SkipBreakCommand}"/>
+                            <Button Grid.Column="1" Classes="ghost" Content="TAKE NSDR INSTEAD" IsVisible="{Binding CanTakeNsdr}"
+                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                    Command="{Binding TakeNsdrInsteadCommand}"/>
+                        </Grid>
+
+                        <!-- break over: wait for the user -->
+                        <StackPanel Spacing="8" IsVisible="{Binding IsBreakOver}">
+                            <TextBlock Classes="micro" Foreground="{DynamicResource WarningBrush}" HorizontalAlignment="Center"
+                                       Text="BREAK OVER — START NEXT POMODORO"/>
+                            <Button Classes="primary" Content="START NEXT POMODORO"
+                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                    Command="{Binding StartNextPomodoroCommand}"/>
+                        </StackPanel>
+                    </StackPanel>
+
                     <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
                         <Button Content="{Binding PauseResumeText}"
+                                IsEnabled="{Binding IsWorkPhase}"
                                 HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Center"
                                 Command="{Binding PauseResumeCommand}"/>

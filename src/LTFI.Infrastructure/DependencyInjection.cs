@@ -25,8 +25,12 @@ public static class DependencyInjection
         services.AddSingleton<ITaskService, TaskService>();
         services.AddSingleton<IMilestoneService, MilestoneService>();
         services.AddSingleton<IAreaService, AreaService>();
+        services.AddSingleton(TimeProvider.System);
         // Holds the live focus timer in memory, so it must be a singleton.
         services.AddSingleton<IFocusSessionService, FocusSessionService>();
+        // Pomodoro phase + NSDR run also live in memory (survive navigation): singletons too.
+        services.AddSingleton<INsdrService, NsdrService>();
+        services.AddSingleton<IPomodoroService, PomodoroService>();
         services.AddSingleton<IInsightsService, InsightsService>();
         services.AddSingleton<IReviewService, ReviewService>();
         services.AddSingleton<IEvidenceService, EvidenceService>();
@@ -48,6 +52,7 @@ public static class DependencyInjection
         // Windows syncs it down, and this file source reads it. Swap the source to change producer.
         services.AddSingleton(SettingsStore.Load());
         services.AddSingleton(sp => sp.GetRequiredService<LtfiSettings>().Reminders);
+        services.AddSingleton(sp => sp.GetRequiredService<LtfiSettings>().Focus);
         // Write-back: outbox.json beside the export, applied by the iPhone's "LTFI Apply" Shortcut.
         services.AddSingleton<IReminderOutbox>(sp =>
         {

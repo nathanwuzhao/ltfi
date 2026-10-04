@@ -25,6 +25,8 @@ namespace LTFI.ViewModels;
 public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
 {
     private readonly IFocusSessionService _focus;
+    private readonly IPomodoroService _pomodoro;
+    private readonly INsdrService _nsdr;
     private readonly IProjectService _projectService;
     private readonly ITaskService _taskService;
     private readonly IMilestoneService _milestoneService;
@@ -109,6 +111,8 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
 
     public CommandCenterViewModel(
         IFocusSessionService focus,
+        IPomodoroService pomodoro,
+        INsdrService nsdr,
         IProjectService projectService,
         ITaskService taskService,
         IMilestoneService milestoneService,
@@ -117,6 +121,8 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
         IInsightsService insights)
     {
         _focus = focus;
+        _pomodoro = pomodoro;
+        _nsdr = nsdr;
         _projectService = projectService;
         _taskService = taskService;
         _milestoneService = milestoneService;
@@ -142,6 +148,22 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
             if (!_focus.HasActiveSession)
             {
                 OpenFocusRequested?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+
+            // Pomodoro break: the session stays paused; the button skips / ends the break instead.
+            if (_pomodoro.GetSnapshot() is { IsBreak: true } pomo)
+            {
+                if (pomo.IsBreakOver)
+                {
+                    await _pomodoro.StartNextAsync();
+                }
+                else
+                {
+                    await _pomodoro.SkipBreakAsync();
+                }
+
+                SyncCurrentOp();
                 return;
             }
 
@@ -507,6 +529,19 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
     private void SyncCurrentOp()
     {
         var s = _focus.GetActiveSnapshot();
+        if (s is null && _nsdr.GetSnapshot() is { } rest)
+        {
+            // Standalone NSDR: show the rest countdown; the button opens the Focus page.
+            HasActiveSession = false;
+            IsRunning = false;
+            ClockText = FormatCountdown(rest.Remaining);
+            OpContext = "NSDR · RESTING";
+            OpTitle = "Non-sleep deep rest";
+            OpIntent = rest.Cue.Title.ToLowerInvariant();
+            RunLabel = "VIEW";
+            return;
+        }
+
         if (s is null)
         {
             HasActiveSession = false;
@@ -528,7 +563,25 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
         OpContext = $"{code} · {(IsRunning ? "RUNNING" : "PAUSED")}";
         OpTitle = s.TaskTitle ?? s.Intent ?? "Focused work";
         OpIntent = string.IsNullOrWhiteSpace(s.Intent) ? string.Empty : $"intent — {s.Intent}";
+
+        // Pomodoro run: the clock shows the phase countdown instead of elapsed.
+        if (_pomodoro.GetSnapshot() is { } pomo)
+        {
+            ClockText = FormatCountdown(pomo.Remaining);
+            var phase = pomo.IsBreakOver ? "BREAK OVER"
+                : pomo.IsWorkPaused ? "WORK · PAUSED"
+                : pomo.PhaseLabel;
+            OpContext = $"{code} · {phase} · {pomo.Dots}";
+            RunLabel = pomo.IsBreakOver ? "START NEXT"
+                : pomo.IsBreak ? (pomo.Phase == PomodoroPhase.Nsdr ? "END NSDR" : "SKIP BREAK")
+                : RunLabel;
+            OpIntent = $"{pomo.CompletedWork} pomodoro{(pomo.CompletedWork == 1 ? "" : "s")} · {FormatClock(s.Elapsed)} worked"
+                       + (string.IsNullOrWhiteSpace(s.Intent) ? string.Empty : $" · intent — {s.Intent}");
+        }
     }
+
+    private static string FormatCountdown(TimeSpan remaining) =>
+        FormatClock(TimeSpan.FromSeconds(Math.Ceiling(Math.Max(0, remaining.TotalSeconds))));
 
     // ---------- helpers ----------
 
@@ -574,6 +627,7 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
         EvidenceType.FileChanged => "FILE",
         EvidenceType.DistractionOverride => "OVERRIDE",
         EvidenceType.DistractionBlocked => "BLOCK",
+        EvidenceType.NsdrCompleted => "NSDR",
         _ => "NOTE",
     };
 

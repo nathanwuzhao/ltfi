@@ -13,7 +13,8 @@ public sealed record ActiveFocusSnapshot(
     string? TaskTitle,
     string? Intent,
     FocusSessionStatus Status,
-    TimeSpan Elapsed);
+    TimeSpan Elapsed,
+    int PomodorosCompleted = 0);
 
 /// <summary>
 /// Drives the single active focus session: start, pause/resume, finish, abandon. The authoritative
@@ -32,6 +33,12 @@ public interface IFocusSessionService
     Task PauseAsync(CancellationToken cancellationToken = default);
 
     Task ResumeAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// A pomodoro work interval ended: count it and pause the clock (breaks aren't work time).
+    /// Persists <see cref="FocusSession.PomodorosCompleted"/> with the banked duration.
+    /// </summary>
+    Task CompletePomodoroAsync(CancellationToken cancellationToken = default);
 
     Task<FocusSession> FinishAsync(
         FocusSessionResult result,

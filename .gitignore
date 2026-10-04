@@ -489,3 +489,4 @@ $RECYCLE.BIN/
 # Claude Code workflow worktrees
 .claude/worktrees/
 .claude/settings.local.json
+docs/*.mp3
