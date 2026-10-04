@@ -27,7 +27,7 @@ public sealed class ReviewService(IDbContextFactory<LtfiDbContext> contextFactor
         await using var db = await _contextFactory.CreateDbContextAsync(cancellationToken);
 
         var projects = await db.Projects.AsNoTracking()
-            .Select(p => new { p.Id, p.Title, p.Status, p.CreatedAt, p.ArchivedAt, p.LastActiveAt })
+            .Select(p => new { p.Id, p.Title, p.Status, p.IsStanding, p.CreatedAt, p.ArchivedAt, p.LastActiveAt })
             .ToListAsync(cancellationToken);
 
         var tasks = await db.Tasks.AsNoTracking()
@@ -49,6 +49,8 @@ public sealed class ReviewService(IDbContextFactory<LtfiDbContext> contextFactor
 
         var sessionsThisWeek = sessions.Where(s => s.EndedAt >= weekAgo).ToList();
         var activeProjects = projects.Where(p => p.Status == ProjectStatus.Active).ToList();
+        // Standing projects ("Life") never finish: they don't count toward the limit and can't stall.
+        var limitedProjects = activeProjects.Where(p => !p.IsStanding).ToList();
 
         var projectActivity = activeProjects
             .Select(p => new ProjectActivityLine(
@@ -59,7 +61,7 @@ public sealed class ReviewService(IDbContextFactory<LtfiDbContext> contextFactor
             .ToList();
 
         var stalled = new List<StalledProjectLine>();
-        foreach (var p in activeProjects)
+        foreach (var p in limitedProjects)
         {
             var times = new List<DateTimeOffset> { p.LastActiveAt ?? p.CreatedAt };
             times.AddRange(sessions.Where(s => s.ProjectId == p.Id && s.EndedAt is not null).Select(s => s.EndedAt!.Value));
@@ -74,9 +76,9 @@ public sealed class ReviewService(IDbContextFactory<LtfiDbContext> contextFactor
         }
 
         return new WeeklyReview(
-            ActiveProjectCount: activeProjects.Count,
+            ActiveProjectCount: limitedProjects.Count,
             MaxActiveProjects: ProjectPolicy.MaxActiveProjects,
-            IsOverLimit: activeProjects.Count > ProjectPolicy.MaxActiveProjects,
+            IsOverLimit: limitedProjects.Count > ProjectPolicy.MaxActiveProjects,
             TasksCompletedThisWeek: completedThisWeek.Count,
             FocusTimeThisWeek: Sum(sessionsThisWeek.Select(s => s.Duration)),
             NewProjectsThisWeek: projects.Count(p => p.CreatedAt >= weekAgo),

@@ -20,6 +20,33 @@ public sealed class RemindersSettings
     /// Null = auto-detect in the iCloud for Windows folders (see <see cref="SettingsStore.ResolveRemindersPath"/>).
     /// </summary>
     public string? SnapshotPath { get; set; }
+
+    /// <summary>
+    /// The standing project (exempt from the active limit) that reminders land in by default:
+    /// an unmapped list "X" becomes area "X" of this project. Created on demand by the sync.
+    /// </summary>
+    public string StandingProject { get; set; } = "Life";
+
+    /// <summary>
+    /// The Reminders list LTFI puts new reminders in when the task's project is not the standing
+    /// one (for standing-project tasks the area name is the list).
+    /// </summary>
+    public string LtfiList { get; set; } = "LTFI";
+
+    /// <summary>
+    /// Optional overrides, by list name (case-insensitive): <c>{"GATECH": {"project": "School", "area": "Classes"}}</c>.
+    /// A mapped project that doesn't exist falls back to the default rule (it is not auto-created,
+    /// so the sync never trips the active-project limit).
+    /// </summary>
+    public Dictionary<string, ReminderListMapping>? ListMap { get; set; }
+}
+
+/// <summary>Where reminders from one list are filed. A blank <see cref="Area"/> means no area.</summary>
+public sealed class ReminderListMapping
+{
+    public string? Project { get; set; }
+
+    public string? Area { get; set; }
 }
 
 /// <summary>Loads (and on first run creates) <see cref="LtfiSettings"/>. A broken file falls back to defaults.</summary>
@@ -94,5 +121,13 @@ public static class SettingsStore
 
         var candidates = DefaultRemindersCandidates();
         return candidates.FirstOrDefault(File.Exists) ?? candidates[0];
+    }
+
+    /// <summary>The write-back file: <c>outbox.json</c> in the same folder as the resolved export.</summary>
+    public static string ResolveOutboxPath(RemindersSettings settings)
+    {
+        var snapshot = ResolveRemindersPath(settings);
+        var folder = Path.GetDirectoryName(snapshot);
+        return string.IsNullOrEmpty(folder) ? "outbox.json" : Path.Combine(folder, "outbox.json");
     }
 }

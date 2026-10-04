@@ -16,6 +16,11 @@ public class TaskItem
 
     public Project? Project { get; set; }
 
+    /// <summary>Optional area within <see cref="Project"/> (must belong to the same project).</summary>
+    public Guid? AreaId { get; set; }
+
+    public ProjectArea? Area { get; set; }
+
     /// <summary>Optional milestone association (wired in Phase 3).</summary>
     public Guid? MilestoneId { get; set; }
 
@@ -58,8 +63,17 @@ public class TaskItem
     /// <summary>Set when the item vanished from the external source; the row is kept, never hard-deleted.</summary>
     public DateTimeOffset? ExternalRemovedAt { get; set; }
 
+    /// <summary>
+    /// Set while LTFI has write-back commands for this task (create/complete) that the iPhone
+    /// hasn't confirmed in an export yet; cleared by the sync once they all show up.
+    /// </summary>
+    public DateTimeOffset? ExternalPendingSince { get; set; }
+
     /// <summary>True when this task mirrors an external item (derived, not stored).</summary>
     public bool IsExternal => ExternalSource is not null;
+
+    /// <summary>True while a change made in LTFI is waiting for the iPhone (derived, not stored).</summary>
+    public bool IsPendingOnPhone => ExternalPendingSince is not null;
 
     public ICollection<SubtaskItem> Subtasks { get; set; } = new List<SubtaskItem>();
 

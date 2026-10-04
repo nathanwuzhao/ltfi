@@ -40,7 +40,7 @@ public sealed record ContributionStats(
 
 /// <summary>
 /// A GitHub-style contribution graph (the Command Center's headline panel): the trailing
-/// <c>days</c> window ending today, laid out as Sunday-start week columns Ã— 7 weekday rows.
+/// <c>days</c> window ending today, laid out as Sunday-start week columns × 7 weekday rows.
 /// Intensity levels follow GitHub's approach — quartiles of the non-zero days — so the ramp
 /// adapts to however much the user actually does, and the best day is always the brightest.
 /// Pure: callers supply per-day scores and "today".

@@ -34,7 +34,11 @@
                         <DataTemplate x:DataType="domain:Project">
                             <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Margin="2">
                                 <StackPanel Spacing="3">
-                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                                        <TextBlock Classes="faint" FontSize="11" VerticalAlignment="Center"
+                                                   Text="STANDING" IsVisible="{Binding IsStanding}"/>
+                                    </StackPanel>
                                     <TextBlock Classes="muted" FontSize="12"
                                                Text="{Binding Description, FallbackValue=''}"/>
                                 </StackPanel>
@@ -101,6 +105,8 @@
                         <ComboBox HorizontalAlignment="Stretch"
                                   ItemsSource="{Binding Statuses}"
                                   SelectedItem="{Binding SelectedStatus, Mode=TwoWay}"/>
+                        <CheckBox Content="Standing project (never finishes, e.g. Life) — exempt from the active-project limit"
+                                  IsChecked="{Binding DraftIsStanding, Mode=TwoWay}"/>
                     </StackPanel>
 
                     <StackPanel Spacing="6">
@@ -174,6 +180,42 @@
                                 <TextBox Text="{Binding NewMilestoneTitle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                          PlaceholderText="Add a milestone…"/>
                                 <Button Grid.Column="1" Content="Add" Command="{Binding AddMilestoneCommand}"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Areas: sub-divisions of the project (robotics → firmware / mcad / ecad).
+                         For the standing project each area is one iPhone Reminders list. -->
+                    <Border BorderBrush="{DynamicResource BorderSubtleBrush}"
+                            BorderThickness="0,1,0,0"
+                            Padding="0,14,0,0"
+                            IsVisible="{Binding CanManageMilestones}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Classes="section-header" Text="AREAS"/>
+                            <TextBlock Classes="faint" FontSize="11" TextWrapping="Wrap"
+                                       IsVisible="{Binding DraftIsStanding}"
+                                       Text="Each area here is an iPhone Reminders list of the same name. The sync adds areas for new lists by itself."/>
+
+                            <ItemsControl ItemsSource="{Binding Areas}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:AreaRowViewModel">
+                                        <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,2">
+                                            <TextBox Text="{Binding EditName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                            <Button Grid.Column="1" Content="Rename" Margin="8,0,6,0"
+                                                    Command="{ReflectionBinding $parent[UserControl].DataContext.RenameAreaCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                            <Button Grid.Column="2" Classes="danger" Content="Remove"
+                                                    Command="{ReflectionBinding $parent[UserControl].DataContext.DeleteAreaCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                <TextBox Text="{Binding NewAreaName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                         PlaceholderText="Add an area…"/>
+                                <Button Grid.Column="1" Content="Add" Command="{Binding AddAreaCommand}"/>
                             </Grid>
                         </StackPanel>
                     </Border>

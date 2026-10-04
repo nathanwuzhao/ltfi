@@ -17,9 +17,20 @@ namespace LTFI.Infrastructure.Reminders;
 /// Array elements that are themselves JSON strings (a Shortcuts quirk) are unwrapped.
 /// Items without a usable title are skipped; anything structurally unreadable throws
 /// <see cref="ReminderSourceException"/> so the sync keeps the last good state.
+/// <para>
+/// Identity (<see cref="ExternalReminder.ExternalId"/>), in order of precedence:
+/// (a) a <c>url</c> starting with <c>ltfi://r/</c>, verbatim; (b) a real <c>id</c>/<c>identifier</c>;
+/// (c) <see cref="ReminderRules.ComposeKey"/> from the creation date, with the title appended only
+/// when two reminders in the same export share that creation date. Every item also carries its (c)
+/// key as <see cref="ExternalReminder.FallbackKey"/> so the sync can adopt a row keyed before the
+/// export Shortcut stamped a URL on it.
+/// </para>
 /// </summary>
 public static class ReminderJsonParser
 {
+    /// <summary>A parsed item before keys are assigned (keys need the whole export for tiebreaks).</summary>
+    private sealed record RawItem(ExternalReminder Reminder, string? Id);
+
     public static ReminderSnapshot Parse(string text)
     {
         text = text.Trim().TrimStart('﻿');
@@ -28,28 +39,58 @@ public static class ReminderJsonParser
             throw new ReminderSourceException("The reminders file is empty.");
         }
 
+        List<RawItem> items;
+        DateTimeOffset? exportedAt = null;
+        string? producer = null;
         try
         {
             using var doc = JsonDocument.Parse(text, new JsonDocumentOptions { AllowTrailingCommas = true });
-            return FromRoot(doc.RootElement);
+            (items, exportedAt, producer) = FromRoot(doc.RootElement);
         }
         catch (JsonException) when (text.Contains('\n'))
         {
             // Not a single JSON document — try JSON Lines.
-            return FromJsonLines(text);
+            items = FromJsonLines(text);
         }
         catch (JsonException ex)
         {
             throw new ReminderSourceException("The reminders file is not valid JSON.", ex);
         }
+
+        return new ReminderSnapshot(AssignKeys(items), exportedAt, producer);
     }
 
-    private static ReminderSnapshot FromRoot(JsonElement root)
+    /// <summary>Applies the key precedence (see the class summary) across the whole export.</summary>
+    private static List<ExternalReminder> AssignKeys(List<RawItem> items)
+    {
+        // Creation dates shared by 2+ reminders in this export need the title as a tiebreak.
+        var createdCounts = items
+            .GroupBy(i => ReminderRules.FormatCreated(i.Reminder.CreatedAt), StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+
+        var keyed = new List<ExternalReminder>(items.Count);
+        foreach (var (reminder, id) in items)
+        {
+            var created = ReminderRules.FormatCreated(reminder.CreatedAt);
+            var collides = created.Length == 0 || createdCounts[created] > 1;
+            var fallback = ReminderRules.ComposeKey(reminder.CreatedAt, collides ? reminder.Title : null);
+
+            var externalId = ReminderRules.IsLtfiUrl(reminder.Url) ? reminder.Url!
+                : !string.IsNullOrWhiteSpace(id) ? id.Trim()
+                : fallback;
+
+            keyed.Add(reminder with { ExternalId = externalId, FallbackKey = fallback });
+        }
+
+        return keyed;
+    }
+
+    private static (List<RawItem> Items, DateTimeOffset? ExportedAt, string? Producer) FromRoot(JsonElement root)
     {
         switch (root.ValueKind)
         {
             case JsonValueKind.Array:
-                return new ReminderSnapshot(ReadItems(root.EnumerateArray()), null, null);
+                return (ReadItems(root.EnumerateArray()), null, null);
 
             case JsonValueKind.Object:
                 var props = Props(root);
@@ -59,24 +100,24 @@ public static class ReminderJsonParser
                     var items = list.ValueKind switch
                     {
                         JsonValueKind.Array => ReadItems(list.EnumerateArray()),
-                        JsonValueKind.String => FromJsonLines(list.GetString() ?? string.Empty).Reminders,
+                        JsonValueKind.String => FromJsonLines(list.GetString() ?? string.Empty),
                         JsonValueKind.Null => [],
                         _ => throw new ReminderSourceException("\"reminders\" must be an array.")
                     };
-                    return new ReminderSnapshot(items, Date(props, "exportedAt"), Text(props, "source"));
+                    return (items, Date(props, "exportedAt"), Text(props, "source"));
                 }
 
                 // A single bare reminder object (a one-line JSONL file).
-                return new ReminderSnapshot(ReadItems([root]), null, null);
+                return (ReadItems([root]), null, null);
 
             default:
                 throw new ReminderSourceException("The reminders file must contain a JSON object or array.");
         }
     }
 
-    private static ReminderSnapshot FromJsonLines(string text)
+    private static List<RawItem> FromJsonLines(string text)
     {
-        var items = new List<ExternalReminder>();
+        var items = new List<RawItem>();
         foreach (var raw in text.Split('\n'))
         {
             var line = raw.Trim().TrimEnd(',');
@@ -96,12 +137,12 @@ public static class ReminderJsonParser
             }
         }
 
-        return new ReminderSnapshot(items, null, null);
+        return items;
     }
 
-    private static List<ExternalReminder> ReadItems(IEnumerable<JsonElement> elements)
+    private static List<RawItem> ReadItems(IEnumerable<JsonElement> elements)
     {
-        var items = new List<ExternalReminder>();
+        var items = new List<RawItem>();
         foreach (var element in elements)
         {
             if (element.ValueKind == JsonValueKind.String)
@@ -135,7 +176,7 @@ public static class ReminderJsonParser
         return items;
     }
 
-    private static ExternalReminder? ReadItem(JsonElement element)
+    private static RawItem? ReadItem(JsonElement element)
     {
         var props = Props(element);
         var title = Text(props, "title");
@@ -151,12 +192,10 @@ public static class ReminderJsonParser
         var isCompleted = Bool(props, "isCompleted") ?? Bool(props, "completed") ?? false;
 
         var id = Text(props, "id") ?? Text(props, "identifier");
-        var externalId = string.IsNullOrWhiteSpace(id)
-            ? ReminderRules.ComposeKey(listName, created, title)
-            : id.Trim();
 
-        return new ExternalReminder(
-            externalId,
+        // ExternalId/FallbackKey are assigned once the whole export is read (AssignKeys).
+        var reminder = new ExternalReminder(
+            string.Empty,
             title,
             listName,
             Text(props, "notes"),
@@ -165,7 +204,10 @@ public static class ReminderJsonParser
             isCompleted,
             isCompleted ? Date(props, "completionDate") : null,
             created,
-            Date(props, "lastModifiedDate") ?? Date(props, "modifiedAt"));
+            Date(props, "lastModifiedDate") ?? Date(props, "modifiedAt"),
+            Url: Text(props, "url"));
+
+        return new RawItem(reminder, id);
     }
 
     /// <summary>Case-insensitive view over an object's properties (last duplicate wins).</summary>

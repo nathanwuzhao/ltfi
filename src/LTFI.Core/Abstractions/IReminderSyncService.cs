@@ -16,9 +16,11 @@ public sealed record ReminderSyncResult(
     int Updated = 0,
     int Completed = 0,
     int Removed = 0,
-    string? Error = null)
+    string? Error = null,
+    int Confirmed = 0)
 {
-    public bool HasChanges => Added + Updated + Completed + Removed > 0;
+    /// <summary>True when local data changed (including write-back commands the export confirmed).</summary>
+    public bool HasChanges => Added + Updated + Completed + Removed + Confirmed > 0;
 
     public static ReminderSyncResult Failed(string error) => new(false, DateTimeOffset.Now, Error: error);
 }
@@ -27,9 +29,10 @@ public sealed record ReminderSyncResult(
 public sealed record ReminderSyncStatus(bool IsConfigured, string Location, ReminderSyncResult? LastResult);
 
 /// <summary>
-/// One-way mirror of external reminders onto LTFI tasks (iCloud Reminders stays authoritative).
-/// Upserts by external id, records one TaskCompleted evidence item per completion (so phone
-/// completions feed points and the activity graph), and marks vanished reminders as removed.
+/// Mirror of external reminders onto LTFI tasks (iCloud Reminders is the source of truth).
+/// Upserts by external id, files each reminder under a project/area from its list, records one
+/// TaskCompleted evidence item per completion (so phone completions feed points and the activity
+/// graph), marks vanished reminders as removed, and confirms LTFI's write-back commands.
 /// </summary>
 public interface IReminderSyncService
 {

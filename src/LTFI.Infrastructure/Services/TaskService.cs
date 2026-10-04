@@ -6,14 +6,32 @@ using Microsoft.EntityFrameworkCore;
 using LTFI.Core.Abstractions;
 using LTFI.Core.Domain;
 using LTFI.Infrastructure.Persistence;
+using LTFI.Infrastructure.Reminders;
+using LTFI.Infrastructure.Settings;
 using TaskStatus = LTFI.Core.Domain.TaskStatus;
 
 namespace LTFI.Infrastructure.Services;
 
-/// <summary>Persistence-backed <see cref="ITaskService"/> including subtask management.</summary>
-public sealed class TaskService(IDbContextFactory<LtfiDbContext> contextFactory) : ITaskService
+/// <summary>
+/// Persistence-backed <see cref="ITaskService"/> including subtask management.
+/// iCloud Reminders is the only source of tasks: <see cref="CreateAsync"/> never makes a local-only
+/// task. It makes a reminder-backed task pending on the iPhone (ExternalId = a fresh
+/// <c>ltfi://r/…</c> url) plus an outbox "create" command, and completing a reminder-backed task
+/// queues a "complete" command. Subtasks stay LTFI-local checklists.
+/// </summary>
+public sealed class TaskService(
+    IDbContextFactory<LtfiDbContext> contextFactory,
+    IReminderOutbox? outbox = null,
+    RemindersSettings? settings = null) : ITaskService
 {
+    /// <summary>Shown when a reminder can't be targeted by the outbox (no ltfi:// URL yet).</summary>
+    public const string NoLtfiIdMessage =
+        "This reminder can't be completed from LTFI yet: complete it on your phone " +
+        "(no LTFI id yet — export with URL stamping first).";
+
     private readonly IDbContextFactory<LtfiDbContext> _contextFactory = contextFactory;
+    private readonly IReminderOutbox? _outbox = outbox;
+    private readonly RemindersSettings _settings = settings ?? new RemindersSettings();
 
     public async Task<IReadOnlyList<TaskItem>> GetAllAsync(CancellationToken cancellationToken = default)
     {
@@ -22,6 +40,7 @@ public sealed class TaskService(IDbContextFactory<LtfiDbContext> contextFactory)
         var tasks = await db.Tasks
             .AsNoTracking()
             .Include(t => t.Subtasks)
+            .Include(t => t.Area)
             .ToListAsync(cancellationToken);
 
         await PopulateTimeSpentAsync(db, tasks, cancellationToken);
@@ -42,6 +61,7 @@ public sealed class TaskService(IDbContextFactory<LtfiDbContext> contextFactory)
         var dated = await db.Tasks
             .AsNoTracking()
             .Include(t => t.Subtasks)
+            .Include(t => t.Area)
             .Where(t => t.DueAt != null)
             .ToListAsync(cancellationToken);
 
@@ -62,6 +82,7 @@ public sealed class TaskService(IDbContextFactory<LtfiDbContext> contextFactory)
         var task = await db.Tasks
             .AsNoTracking()
             .Include(t => t.Subtasks)
+            .Include(t => t.Area)
             .FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
 
         if (task is not null)
@@ -76,10 +97,18 @@ public sealed class TaskService(IDbContextFactory<LtfiDbContext> contextFactory)
     {
         ValidateDraft(draft);
 
+        await using var db = await _contextFactory.CreateDbContextAsync(cancellationToken);
+        var (project, area) = await ResolvePlacementAsync(db, draft, requireStandingArea: true, cancellationToken);
+
+        // Standing-project tasks go into the list named by their area; everything else into the
+        // LTFI list. The project/area recorded here is kept by the sync (LTFI-minted url).
+        var list = project?.IsStanding == true ? area!.Name : LtfiList;
+
         var now = DateTimeOffset.Now;
         var task = new TaskItem
         {
-            ProjectId = draft.ProjectId,
+            ProjectId = project?.Id,
+            AreaId = area?.Id,
             Title = draft.Title.Trim(),
             Description = Normalize(draft.Description),
             Status = draft.Status,
@@ -88,12 +117,21 @@ public sealed class TaskService(IDbContextFactory<LtfiDbContext> contextFactory)
             RequiredTime = ToRequiredTime(draft.RequiredMinutes),
             CreatedAt = now,
             UpdatedAt = now,
-            CompletedAt = draft.Status == TaskStatus.Completed ? now : null
+            CompletedAt = draft.Status == TaskStatus.Completed ? now : null,
+            ExternalSource = ReminderRules.SourceKey,
+            ExternalId = ReminderRules.NewLtfiUrl(),
+            ExternalList = list
         };
 
-        await using var db = await _contextFactory.CreateDbContextAsync(cancellationToken);
         db.Tasks.Add(task);
+        ReminderOutbox.EnqueueCreate(db, task, now);
+        if (task.Status == TaskStatus.Completed)
+        {
+            ReminderOutbox.EnqueueComplete(db, task, now);
+        }
+
         await db.SaveChangesAsync(cancellationToken);
+        await FlushOutboxAsync(cancellationToken);
         return task;
     }
 
@@ -105,25 +143,39 @@ public sealed class TaskService(IDbContextFactory<LtfiDbContext> contextFactory)
         var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == id, cancellationToken)
             ?? throw new InvalidOperationException("Task could not be found.");
 
+        // A phone-made reminder's placement comes from its list (the sync re-derives it), so only
+        // tasks LTFI placed itself must name an area under a standing project.
+        var placedByLtfi = task.ExternalSource is null || ReminderRules.IsLtfiCreatedUrl(task.ExternalId);
+        var (project, area) = await ResolvePlacementAsync(db, draft, placedByLtfi, cancellationToken);
         var wasCompleted = task.Status == TaskStatus.Completed;
 
-        task.ProjectId = draft.ProjectId;
+        task.ProjectId = project?.Id;
+        task.AreaId = area?.Id;
         task.Title = draft.Title.Trim();
         task.Description = Normalize(draft.Description);
         task.Priority = draft.Priority;
         task.DueAt = draft.DueAt;
         task.RequiredTime = ToRequiredTime(draft.RequiredMinutes);
 
-        if (draft.Status == TaskStatus.Completed)
+        if (draft.Status == TaskStatus.Completed && !wasCompleted)
         {
-            await EnsureRequiredTimeMetAsync(db, task, cancellationToken);
+            await EnsureCanCompleteAsync(db, task, cancellationToken);
         }
 
         ApplyStatus(task, draft.Status);
-        task.UpdatedAt = DateTimeOffset.Now;
+        var now = DateTimeOffset.Now;
+        task.UpdatedAt = now;
+
+        // Still waiting for the iPhone to create it: the create command carries the edits.
+        var outboxChanged = await RefreshPendingCreateAsync(db, task, project, area, cancellationToken);
+        outboxChanged |= QueueCompletionWriteBack(db, task, wasCompleted, now);
 
         RecordCompletionEvidence(db, task, wasCompleted);
         await db.SaveChangesAsync(cancellationToken);
+        if (outboxChanged)
+        {
+            await FlushOutboxAsync(cancellationToken);
+        }
     }
 
     public async Task SetStatusAsync(Guid id, TaskStatus status, CancellationToken cancellationToken = default)
@@ -134,16 +186,22 @@ public sealed class TaskService(IDbContextFactory<LtfiDbContext> contextFactory)
 
         var wasCompleted = task.Status == TaskStatus.Completed;
 
-        if (status == TaskStatus.Completed)
+        if (status == TaskStatus.Completed && !wasCompleted)
         {
-            await EnsureRequiredTimeMetAsync(db, task, cancellationToken);
+            await EnsureCanCompleteAsync(db, task, cancellationToken);
         }
 
         ApplyStatus(task, status);
-        task.UpdatedAt = DateTimeOffset.Now;
+        var now = DateTimeOffset.Now;
+        task.UpdatedAt = now;
 
+        var outboxChanged = QueueCompletionWriteBack(db, task, wasCompleted, now);
         RecordCompletionEvidence(db, task, wasCompleted);
         await db.SaveChangesAsync(cancellationToken);
+        if (outboxChanged)
+        {
+            await FlushOutboxAsync(cancellationToken);
+        }
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
@@ -155,8 +213,109 @@ public sealed class TaskService(IDbContextFactory<LtfiDbContext> contextFactory)
             return;
         }
 
+        // Commands the iPhone hasn't applied yet are withdrawn, so a deleted draft never reaches it.
+        var unsent = task.ExternalId is { } url
+            ? await db.Outbox.Where(c => c.ExternalUrl == url && c.ConfirmedAt == null).ToListAsync(cancellationToken)
+            : [];
+        db.Outbox.RemoveRange(unsent);
+
         db.Tasks.Remove(task);
         await db.SaveChangesAsync(cancellationToken);
+        if (unsent.Count > 0)
+        {
+            await FlushOutboxAsync(cancellationToken);
+        }
+    }
+
+    private string LtfiList =>
+        string.IsNullOrWhiteSpace(_settings.LtfiList) ? "LTFI" : _settings.LtfiList.Trim();
+
+    /// <summary>Loads and checks the draft's project/area: the area must belong to the project, and a
+    /// standing project needs an area (its name is the Reminders list).</summary>
+    private static async Task<(Project? Project, ProjectArea? Area)> ResolvePlacementAsync(
+        LtfiDbContext db, TaskDraft draft, bool requireStandingArea, CancellationToken cancellationToken)
+    {
+        Project? project = null;
+        if (draft.ProjectId is { } projectId)
+        {
+            project = await db.Projects.AsNoTracking().FirstOrDefaultAsync(p => p.Id == projectId, cancellationToken)
+                ?? throw new InvalidOperationException("Project could not be found.");
+        }
+
+        ProjectArea? area = null;
+        if (draft.AreaId is { } areaId)
+        {
+            area = await db.Areas.AsNoTracking().FirstOrDefaultAsync(a => a.Id == areaId, cancellationToken)
+                ?? throw new InvalidOperationException("Area could not be found.");
+            if (area.ProjectId != project?.Id)
+            {
+                throw new InvalidOperationException("That area belongs to a different project.");
+            }
+        }
+
+        if (requireStandingArea && project is { IsStanding: true } && area is null)
+        {
+            throw new InvalidOperationException(
+                $"Pick an area for {project.Title} tasks — the area is the iPhone Reminders list it goes into.");
+        }
+
+        return (project, area);
+    }
+
+    /// <summary>
+    /// The focus gate, plus the write-back rule: a reminder-backed task can only be completed from
+    /// LTFI when it has an <c>ltfi://</c> url the "LTFI Apply" Shortcut can find it by.
+    /// </summary>
+    private static async Task EnsureCanCompleteAsync(LtfiDbContext db, TaskItem task, CancellationToken cancellationToken)
+    {
+        if (task.ExternalSource == ReminderRules.SourceKey && !ReminderRules.IsLtfiUrl(task.ExternalId))
+        {
+            throw new InvalidOperationException(NoLtfiIdMessage);
+        }
+
+        await EnsureRequiredTimeMetAsync(db, task, cancellationToken);
+    }
+
+    /// <summary>Queues a "complete" command when a reminder-backed task becomes Completed in LTFI.</summary>
+    private static bool QueueCompletionWriteBack(LtfiDbContext db, TaskItem task, bool wasCompleted, DateTimeOffset now)
+    {
+        if (wasCompleted || task.Status != TaskStatus.Completed
+            || task.ExternalSource != ReminderRules.SourceKey || !ReminderRules.IsLtfiUrl(task.ExternalId))
+        {
+            return false;
+        }
+
+        ReminderOutbox.EnqueueComplete(db, task, now);
+        return true;
+    }
+
+    /// <summary>Rewrites an unconfirmed create command's payload after the task was edited.</summary>
+    private async Task<bool> RefreshPendingCreateAsync(
+        LtfiDbContext db, TaskItem task, Project? project, ProjectArea? area, CancellationToken cancellationToken)
+    {
+        if (task.ExternalId is not { } url || !ReminderRules.IsLtfiCreatedUrl(url))
+        {
+            return false;
+        }
+
+        var create = await db.Outbox.FirstOrDefaultAsync(
+            c => c.ExternalUrl == url && c.Op == OutboxCommand.CreateOp && c.ConfirmedAt == null, cancellationToken);
+        if (create is null)
+        {
+            return false;
+        }
+
+        task.ExternalList = project?.IsStanding == true ? area!.Name : LtfiList;
+        create.PayloadJson = ReminderOutbox.CreatePayload(task);
+        return true;
+    }
+
+    private async Task FlushOutboxAsync(CancellationToken cancellationToken)
+    {
+        if (_outbox is not null)
+        {
+            await _outbox.FlushAsync(cancellationToken);
+        }
     }
 
     public async Task<SubtaskItem> AddSubtaskAsync(Guid taskId, string title, CancellationToken cancellationToken = default)

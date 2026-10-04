@@ -18,7 +18,9 @@ public sealed record ExternalReminder(
     bool IsCompleted = false,
     DateTimeOffset? CompletedAt = null,
     DateTimeOffset? CreatedAt = null,
-    DateTimeOffset? ModifiedAt = null);
+    DateTimeOffset? ModifiedAt = null,
+    string? Url = null,
+    string? FallbackKey = null);
 
 /// <summary>
 /// Pure rules shared by every reminder producer so they key and map items identically
@@ -29,19 +31,76 @@ public static class ReminderRules
     /// <summary>Stored in <see cref="TaskItem.ExternalSource"/> and <see cref="EvidenceItem.Source"/>.</summary>
     public const string SourceKey = "icloud-reminders";
 
+    /// <summary>Prefix of the ids LTFI and the export Shortcut stamp into a reminder's URL field.</summary>
+    public const string LtfiUrlPrefix = "ltfi://r/";
+
     /// <summary>
-    /// The key for a reminder with no real id: <c>sc:list|creationDate|title</c> (lower-cased, date
-    /// in UTC rounded to the second). Deliberately an unhashed plain string so an iPhone Shortcut can
-    /// compute the same value for future write-back. Renaming or moving a reminder changes the key,
-    /// which the sync sees as a removal plus an add — acceptable for a mirror.
+    /// Fallback key for a reminder with neither an <c>ltfi://</c> URL nor a real id:
+    /// <c>cd:&lt;creationDate in UTC to the second&gt;</c>. When two reminders in one export share a
+    /// creation date (or there is no creation date), pass the title as <paramref name="tiebreakTitle"/>
+    /// to get <c>cd:&lt;date&gt;|&lt;lower-cased trimmed title&gt;</c>. The title is otherwise not part of
+    /// the key, so renaming or moving a reminder keeps its identity.
     /// </summary>
-    public static string ComposeKey(string? listName, DateTimeOffset? createdAt, string title)
+    public static string ComposeKey(DateTimeOffset? createdAt, string? tiebreakTitle = null)
     {
-        var created = createdAt is { } c
+        var key = "cd:" + FormatCreated(createdAt);
+        return tiebreakTitle is null ? key : $"{key}|{tiebreakTitle.Trim().ToLowerInvariant()}";
+    }
+
+    /// <summary>The creation date as used in <see cref="ComposeKey"/> (UTC, to the second); empty for null.</summary>
+    public static string FormatCreated(DateTimeOffset? createdAt) =>
+        createdAt is { } c
             ? c.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture)
             : string.Empty;
-        return $"sc:{(listName ?? string.Empty).Trim().ToLowerInvariant()}|{created}|{title.Trim().ToLowerInvariant()}";
+
+    /// <summary>True for an <c>ltfi://r/…</c> id (stamped by LTFI or by the export Shortcut).</summary>
+    public static bool IsLtfiUrl(string? value) =>
+        value is not null
+        && value.StartsWith(LtfiUrlPrefix, StringComparison.OrdinalIgnoreCase)
+        && value.Length > LtfiUrlPrefix.Length;
+
+    /// <summary>A fresh id for a reminder LTFI creates: <c>ltfi://r/&lt;32 hex digits&gt;</c>.</summary>
+    public static string NewLtfiUrl() => LtfiUrlPrefix + Guid.NewGuid().ToString("N");
+
+    /// <summary>
+    /// True for an id LTFI itself minted (<see cref="NewLtfiUrl"/>: 32 hex digits), as opposed to one
+    /// the export Shortcut stamped (<c>yyyyMMddHHmmss-NNNNN</c>). The sync keeps the project/area LTFI
+    /// recorded for those instead of re-deriving it from the list.
+    /// </summary>
+    public static bool IsLtfiCreatedUrl(string? value)
+    {
+        if (!IsLtfiUrl(value))
+        {
+            return false;
+        }
+
+        var rest = value!.AsSpan(LtfiUrlPrefix.Length);
+        if (rest.Length != 32)
+        {
+            return false;
+        }
+
+        foreach (var ch in rest)
+        {
+            if (!char.IsAsciiHexDigit(ch))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
+
+    /// <summary>
+    /// LTFI priority → the text the iPhone's Add New Reminder takes. Medium is LTFI's "no priority"
+    /// (None imports as Medium), so it goes out as None rather than putting "!!" on every reminder.
+    /// </summary>
+    public static string ToApplePriority(TaskPriority priority) => priority switch
+    {
+        TaskPriority.Urgent or TaskPriority.High => "High",
+        TaskPriority.Low => "Low",
+        _ => "None"
+    };
 
     /// <summary>
     /// Maps Apple's priority (numeric 0 none / 1 high / 5 medium / 9 low, as pyicloud reports it,

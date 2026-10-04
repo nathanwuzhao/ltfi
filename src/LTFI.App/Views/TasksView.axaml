@@ -18,7 +18,8 @@
                     <Button Content="New Task"
                             Classes="primary"
                             HorizontalAlignment="Left"
-                            Command="{Binding NewTaskCommand}"/>
+                            Command="{Binding NewTaskCommand}"
+                            ToolTip.Tip="Creates an iCloud reminder (via outbox.json and the LTFI Apply Shortcut)"/>
                     <CheckBox Grid.Column="2"
                               Content="Show archived"
                               VerticalAlignment="Center"
@@ -40,14 +41,24 @@
                                         <TextBlock Classes="muted" FontSize="12" Text="·"/>
                                         <TextBlock Classes="muted" FontSize="12"
                                                    Text="{Binding TimeSpent, Converter={StaticResource DurationToClock}}"/>
+                                        <!-- Area tag (sub-division of the project) -->
+                                        <TextBlock Classes="muted" FontSize="12"
+                                                   IsVisible="{Binding Area, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                   Text="{Binding Area.Name, StringFormat='· #{0}', FallbackValue=''}"/>
                                         <!-- Mirrored from iCloud Reminders -->
                                         <TextBlock Classes="faint" FontSize="11" IsVisible="{Binding IsExternal}"
                                                    Text="{Binding ExternalList, StringFormat='· iCLOUD {0}'}"/>
                                     </StackPanel>
                                 </StackPanel>
-                                <Border Grid.Column="1" Classes="chip">
-                                    <TextBlock Text="{Binding Status}"/>
-                                </Border>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                    <Border Classes="chip" IsVisible="{Binding IsPendingOnPhone}"
+                                            ToolTip.Tip="Waiting for the iPhone: the LTFI Apply Shortcut hasn't run, or the next export hasn't arrived yet">
+                                        <TextBlock Foreground="{DynamicResource WarningBrush}" Text="PENDING ON iPHONE"/>
+                                    </Border>
+                                    <Border Classes="chip">
+                                        <TextBlock Text="{Binding Status}"/>
+                                    </Border>
+                                </StackPanel>
                             </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
@@ -62,8 +73,16 @@
                     <TextBlock Classes="page-title" FontSize="20" Text="{Binding EditorTitle}"/>
 
                     <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap"
+                               IsVisible="{Binding IsCreatingNew}"
+                               Text="{Binding CreateTargetText}"/>
+
+                    <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap"
                                IsVisible="{Binding SelectedTask.IsExternal, FallbackValue=False}"
-                               Text="Mirrored from iCloud Reminders. Title, description, due date and priority are overwritten on the next sync — edit those on your iPhone. Project, status and focus time are LTFI's own."/>
+                               Text="An iCloud reminder. Title, description, due date and priority come from your iPhone on every sync — edit those there (until the iPhone has created it, edits here update the pending reminder). Completing it here ticks it off on the iPhone via the outbox. Status and focus time are LTFI's own."/>
+
+                    <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap"
+                               IsVisible="{Binding IsPlacementLocked}"
+                               Text="Made on the iPhone: its project and area follow its Reminders list (settings.json reminders.listMap, otherwise Life / the list name)."/>
 
                     <StackPanel Spacing="6">
                         <TextBlock Classes="section-header" Text="TITLE"/>
@@ -76,18 +95,34 @@
                                  AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70"/>
                     </StackPanel>
 
-                    <StackPanel Spacing="6">
-                        <TextBlock Classes="section-header" Text="PROJECT"/>
-                        <ComboBox HorizontalAlignment="Stretch"
-                                  ItemsSource="{Binding ProjectOptions}"
-                                  SelectedItem="{Binding SelectedProjectOption, Mode=TwoWay}">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate x:DataType="vm:ProjectOption">
-                                    <TextBlock Text="{Binding Name}"/>
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                    </StackPanel>
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
+                        <StackPanel Spacing="6">
+                            <TextBlock Classes="section-header" Text="PROJECT"/>
+                            <ComboBox HorizontalAlignment="Stretch"
+                                      IsEnabled="{Binding CanEditPlacement}"
+                                      ItemsSource="{Binding ProjectOptions}"
+                                      SelectedItem="{Binding SelectedProjectOption, Mode=TwoWay}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ProjectOption">
+                                        <TextBlock Text="{Binding Name}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="6">
+                            <TextBlock Classes="section-header" Text="AREA"/>
+                            <ComboBox HorizontalAlignment="Stretch"
+                                      IsEnabled="{Binding CanEditPlacement}"
+                                      ItemsSource="{Binding AreaOptions}"
+                                      SelectedItem="{Binding SelectedAreaOption, Mode=TwoWay}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:AreaOption">
+                                        <TextBlock Text="{Binding Name}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+                    </Grid>
 
                     <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
                         <StackPanel Spacing="6">

@@ -69,9 +69,15 @@
                                         <TextBlock Classes="muted" FontSize="12"
                                                    Text="{Binding Description, FallbackValue=''}"/>
                                     </StackPanel>
-                                    <Border Grid.Column="1" Classes="chip" Margin="8,0">
-                                        <TextBlock Text="{Binding Priority}"/>
-                                    </Border>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" Margin="8,0"
+                                                VerticalAlignment="Center">
+                                        <Border Classes="chip" IsVisible="{Binding IsPendingOnPhone}">
+                                            <TextBlock Foreground="{DynamicResource WarningBrush}" Text="PENDING ON iPHONE"/>
+                                        </Border>
+                                        <Border Classes="chip">
+                                            <TextBlock Text="{Binding Priority}"/>
+                                        </Border>
+                                    </StackPanel>
                                     <Button Grid.Column="2"
                                             Content="Complete"
                                             Command="{ReflectionBinding $parent[UserControl].DataContext.CompleteTaskCommand}"
@@ -112,6 +118,12 @@
                     <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource WarningBrush}"
                                Text="{Binding ErrorText}"
                                IsVisible="{Binding ErrorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                    <!-- Write-back: LTFI → outbox.json → "LTFI Apply" Shortcut on the iPhone -->
+                    <TextBlock Classes="micro-dim" TextWrapping="Wrap" Text="{Binding OutboxText}"
+                               ToolTip.Tip="Reminders created or completed in LTFI that the iPhone hasn't confirmed yet"/>
+                    <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource WarningBrush}"
+                               Text="{Binding OutboxError}"
+                               IsVisible="{Binding OutboxError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
                 </StackPanel>
 
                 <!-- Not configured: tell the user where the export should land. -->
@@ -144,7 +156,7 @@
                                                 <DataTemplate x:DataType="vm:ReminderRow">
                                                     <Border BorderBrush="{DynamicResource BorderRowBrush}"
                                                             BorderThickness="0,0,0,1" Padding="10,5">
-                                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                                                             <TextBlock Width="22" FontSize="11"
                                                                        Foreground="{DynamicResource WarningBrush}"
                                                                        Text="{Binding PriorityText}"/>
@@ -152,7 +164,12 @@
                                                                        TextTrimming="CharacterEllipsis"
                                                                        Text="{Binding Title}"
                                                                        ToolTip.Tip="{Binding Title}"/>
-                                                            <TextBlock Grid.Column="2" FontSize="11" Margin="10,0,0,0"
+                                                            <TextBlock Grid.Column="2" FontSize="10" Margin="8,0,0,0"
+                                                                       VerticalAlignment="Center"
+                                                                       Foreground="{DynamicResource WarningBrush}"
+                                                                       Text="PENDING ON iPHONE"
+                                                                       IsVisible="{Binding IsPending}"/>
+                                                            <TextBlock Grid.Column="3" FontSize="11" Margin="10,0,0,0"
                                                                        Foreground="{Binding DueBrush}"
                                                                        Text="{Binding DueText}"/>
                                                         </Grid>

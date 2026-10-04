@@ -30,7 +30,8 @@ public sealed class ProjectService(IDbContextFactory<LtfiDbContext> contextFacto
     public async Task<int> CountActiveAsync(CancellationToken cancellationToken = default)
     {
         await using var db = await _contextFactory.CreateDbContextAsync(cancellationToken);
-        return await db.Projects.CountAsync(p => p.Status == ProjectStatus.Active, cancellationToken);
+        // Standing projects (e.g. "Life") don't count toward the limit, so they don't show on the meter.
+        return await db.Projects.CountAsync(p => p.Status == ProjectStatus.Active && !p.IsStanding, cancellationToken);
     }
 
     public async Task<Project?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -56,13 +57,14 @@ public sealed class ProjectService(IDbContextFactory<LtfiDbContext> contextFacto
             Status = draft.Status,
             DoneCondition = Normalize(draft.DoneCondition),
             TargetDate = draft.TargetDate,
+            IsStanding = draft.IsStanding,
             CreatedAt = now,
             UpdatedAt = now
         };
         ApplyArchiveState(project);
 
         await using var db = await _contextFactory.CreateDbContextAsync(cancellationToken);
-        if (project.Status == ProjectStatus.Active)
+        if (project.Status == ProjectStatus.Active && !project.IsStanding)
         {
             await EnsureActiveLimitNotExceededAsync(db, Guid.Empty, cancellationToken);
         }
@@ -86,8 +88,11 @@ public sealed class ProjectService(IDbContextFactory<LtfiDbContext> contextFacto
             throw new InvalidOperationException("This project was killed and can't be reactivated.");
         }
 
-        // Enforce the active-project limit on the transition into Active.
-        if (draft.Status == ProjectStatus.Active && project.Status != ProjectStatus.Active)
+        // Enforce the active-project limit on the transition into Active — and when an active
+        // standing project stops being standing, since it then starts to count.
+        var countedBefore = project.Status == ProjectStatus.Active && !project.IsStanding;
+        var countedAfter = draft.Status == ProjectStatus.Active && !draft.IsStanding;
+        if (countedAfter && !countedBefore)
         {
             await EnsureActiveLimitNotExceededAsync(db, id, cancellationToken);
         }
@@ -97,6 +102,7 @@ public sealed class ProjectService(IDbContextFactory<LtfiDbContext> contextFacto
         project.Status = draft.Status;
         project.DoneCondition = Normalize(draft.DoneCondition);
         project.TargetDate = draft.TargetDate;
+        project.IsStanding = draft.IsStanding;
         project.UpdatedAt = DateTimeOffset.Now;
         ApplyArchiveState(project);
 
@@ -107,7 +113,7 @@ public sealed class ProjectService(IDbContextFactory<LtfiDbContext> contextFacto
     private static async Task EnsureActiveLimitNotExceededAsync(LtfiDbContext db, Guid excludeId, CancellationToken cancellationToken)
     {
         var activeCount = await db.Projects
-            .CountAsync(p => p.Status == ProjectStatus.Active && p.Id != excludeId, cancellationToken);
+            .CountAsync(p => p.Status == ProjectStatus.Active && !p.IsStanding && p.Id != excludeId, cancellationToken);
 
         if (activeCount >= ProjectPolicy.MaxActiveProjects)
         {

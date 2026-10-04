@@ -24,6 +24,7 @@ public static class DependencyInjection
         services.AddSingleton<IProjectService, ProjectService>();
         services.AddSingleton<ITaskService, TaskService>();
         services.AddSingleton<IMilestoneService, MilestoneService>();
+        services.AddSingleton<IAreaService, AreaService>();
         // Holds the live focus timer in memory, so it must be a singleton.
         services.AddSingleton<IFocusSessionService, FocusSessionService>();
         services.AddSingleton<IInsightsService, InsightsService>();
@@ -46,6 +47,15 @@ public static class DependencyInjection
         // iCloud Reminders mirror: an iPhone Shortcut exports JSON into iCloud Drive, iCloud for
         // Windows syncs it down, and this file source reads it. Swap the source to change producer.
         services.AddSingleton(SettingsStore.Load());
+        services.AddSingleton(sp => sp.GetRequiredService<LtfiSettings>().Reminders);
+        // Write-back: outbox.json beside the export, applied by the iPhone's "LTFI Apply" Shortcut.
+        services.AddSingleton<IReminderOutbox>(sp =>
+        {
+            var reminders = sp.GetRequiredService<RemindersSettings>();
+            return new ReminderOutbox(
+                sp.GetRequiredService<IDbContextFactory<LtfiDbContext>>(),
+                () => SettingsStore.ResolveOutboxPath(reminders));
+        });
         services.AddSingleton<IReminderSource>(sp =>
         {
             var reminders = sp.GetRequiredService<LtfiSettings>().Reminders;

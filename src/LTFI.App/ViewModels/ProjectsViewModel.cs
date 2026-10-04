@@ -11,11 +11,30 @@ using LTFI.Core.Domain;
 
 namespace LTFI.ViewModels;
 
-/// <summary>Create, view, edit, and delete projects (Phase 1 acceptance).</summary>
+/// <summary>One row of the AREAS sub-panel; <see cref="EditName"/> is the rename box.</summary>
+public partial class AreaRowViewModel : ObservableObject
+{
+    public AreaRowViewModel(ProjectArea area)
+    {
+        Id = area.Id;
+        Name = area.Name;
+        editName = area.Name;
+    }
+
+    public Guid Id { get; }
+
+    public string Name { get; }
+
+    [ObservableProperty]
+    private string editName;
+}
+
+/// <summary>Create, view, edit, and delete projects (Phase 1 acceptance), with milestones and areas.</summary>
 public partial class ProjectsViewModel : ViewModelBase, IRefreshable
 {
     private readonly IProjectService _projectService;
     private readonly IMilestoneService _milestoneService;
+    private readonly IAreaService _areaService;
     private readonly List<Project> _allProjects = [];
     private bool _suppressSelectionLoad;
 
@@ -29,6 +48,8 @@ public partial class ProjectsViewModel : ViewModelBase, IRefreshable
     public ObservableCollection<Project> ActiveProjectsToResolve { get; } = [];
 
     public ObservableCollection<Milestone> Milestones { get; } = [];
+
+    public ObservableCollection<AreaRowViewModel> Areas { get; } = [];
 
     public Array Statuses { get; } = Enum.GetValues<ProjectStatus>();
 
@@ -45,8 +66,12 @@ public partial class ProjectsViewModel : ViewModelBase, IRefreshable
     private string newMilestoneTitle = string.Empty;
 
     [ObservableProperty]
+    private string newAreaName = string.Empty;
+
+    [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DeleteProjectCommand))]
     [NotifyCanExecuteChangedFor(nameof(AddMilestoneCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddAreaCommand))]
     [NotifyPropertyChangedFor(nameof(CanManageMilestones))]
     private Project? selectedProject;
 
@@ -55,7 +80,12 @@ public partial class ProjectsViewModel : ViewModelBase, IRefreshable
     [NotifyPropertyChangedFor(nameof(SaveButtonText))]
     [NotifyPropertyChangedFor(nameof(CanManageMilestones))]
     [NotifyCanExecuteChangedFor(nameof(AddMilestoneCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddAreaCommand))]
     private bool isCreatingNew = true;
+
+    /// <summary>A standing project (e.g. "Life") is exempt from the active-project limit.</summary>
+    [ObservableProperty]
+    private bool draftIsStanding;
 
     [ObservableProperty]
     private string draftTitle = string.Empty;
@@ -75,10 +105,11 @@ public partial class ProjectsViewModel : ViewModelBase, IRefreshable
     [ObservableProperty]
     private string feedbackMessage = string.Empty;
 
-    public ProjectsViewModel(IProjectService projectService, IMilestoneService milestoneService)
+    public ProjectsViewModel(IProjectService projectService, IMilestoneService milestoneService, IAreaService areaService)
     {
         _projectService = projectService;
         _milestoneService = milestoneService;
+        _areaService = areaService;
         BeginNewProject();
     }
 
@@ -162,7 +193,7 @@ public partial class ProjectsViewModel : ViewModelBase, IRefreshable
         {
             // Offer the user a way to make room rather than just failing.
             ActiveProjectsToResolve.Clear();
-            foreach (var project in _allProjects.Where(p => p.Status == ProjectStatus.Active))
+            foreach (var project in _allProjects.Where(p => p.Status == ProjectStatus.Active && !p.IsStanding))
             {
                 ActiveProjectsToResolve.Add(project);
             }
@@ -206,7 +237,8 @@ public partial class ProjectsViewModel : ViewModelBase, IRefreshable
                 Description = project.Description,
                 Status = status,
                 DoneCondition = project.DoneCondition,
-                TargetDate = project.TargetDate
+                TargetDate = project.TargetDate,
+                IsStanding = project.IsStanding
             });
         }
         catch (Exception ex)
@@ -265,6 +297,77 @@ public partial class ProjectsViewModel : ViewModelBase, IRefreshable
 
         await _milestoneService.DeleteAsync(milestone.Id);
         await LoadMilestonesAsync(SelectedProject.Id);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanManageMilestones))]
+    private async Task AddAreaAsync()
+    {
+        if (SelectedProject is null || string.IsNullOrWhiteSpace(NewAreaName))
+        {
+            return;
+        }
+
+        try
+        {
+            await _areaService.CreateAsync(SelectedProject.Id, NewAreaName);
+            NewAreaName = string.Empty;
+            await LoadAreasAsync(SelectedProject.Id);
+        }
+        catch (Exception ex)
+        {
+            FeedbackMessage = ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private async Task RenameAreaAsync(AreaRowViewModel? area)
+    {
+        if (area is null || SelectedProject is null || area.EditName.Trim() == area.Name)
+        {
+            return;
+        }
+
+        try
+        {
+            await _areaService.RenameAsync(area.Id, area.EditName);
+            await LoadAreasAsync(SelectedProject.Id);
+            FeedbackMessage = SelectedProject.IsStanding
+                ? "Area renamed. Rename the matching Reminders list on your iPhone too, or the next sync re-creates the old name."
+                : "Area renamed.";
+        }
+        catch (Exception ex)
+        {
+            FeedbackMessage = ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private async Task DeleteAreaAsync(AreaRowViewModel? area)
+    {
+        if (area is null || SelectedProject is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _areaService.DeleteAsync(area.Id);
+            await LoadAreasAsync(SelectedProject.Id);
+        }
+        catch (Exception ex)
+        {
+            FeedbackMessage = ex.Message;
+        }
+    }
+
+    private async Task LoadAreasAsync(Guid projectId)
+    {
+        var areas = await _areaService.GetByProjectAsync(projectId);
+        Areas.Clear();
+        foreach (var area in areas)
+        {
+            Areas.Add(new AreaRowViewModel(area));
+        }
     }
 
     private async Task LoadMilestonesAsync(Guid projectId)
@@ -328,8 +431,11 @@ public partial class ProjectsViewModel : ViewModelBase, IRefreshable
         DraftDoneCondition = string.Empty;
         DraftTargetDateText = string.Empty;
         NewMilestoneTitle = string.Empty;
+        NewAreaName = string.Empty;
+        DraftIsStanding = false;
         FeedbackMessage = string.Empty;
         Milestones.Clear();
+        Areas.Clear();
     }
 
     private void LoadFromProject(Project project)
@@ -338,7 +444,10 @@ public partial class ProjectsViewModel : ViewModelBase, IRefreshable
         DraftTitle = project.Title;
         DraftDescription = project.Description ?? string.Empty;
         NewMilestoneTitle = string.Empty;
+        NewAreaName = string.Empty;
+        DraftIsStanding = project.IsStanding;
         _ = LoadMilestonesAsync(project.Id);
+        _ = LoadAreasAsync(project.Id);
         SelectedStatus = project.Status;
         DraftDoneCondition = project.DoneCondition ?? string.Empty;
         DraftTargetDateText = project.TargetDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty;
@@ -373,7 +482,8 @@ public partial class ProjectsViewModel : ViewModelBase, IRefreshable
             Description = DraftDescription,
             Status = SelectedStatus,
             DoneCondition = DraftDoneCondition,
-            TargetDate = targetDate
+            TargetDate = targetDate,
+            IsStanding = DraftIsStanding
         };
 
         return true;

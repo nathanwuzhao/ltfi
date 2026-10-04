@@ -35,9 +35,17 @@ public class Project
     /// <summary>Archived projects drop out of the active lists. Derived from terminal status.</summary>
     public bool IsArchived => Status is ProjectStatus.Completed or ProjectStatus.Killed;
 
+    /// <summary>
+    /// A standing project (like "Life") never finishes: it is exempt from the active-project limit
+    /// and from stalled detection. The iCloud Reminders sync files unmapped lists under it as areas.
+    /// </summary>
+    public bool IsStanding { get; set; }
+
     public ICollection<TaskItem> Tasks { get; set; } = new List<TaskItem>();
 
     public ICollection<Milestone> Milestones { get; set; } = new List<Milestone>();
+
+    public ICollection<ProjectArea> Areas { get; set; } = new List<ProjectArea>();
 
     /// <summary>
     /// Derived from task/subtask completion (not stored). Requires <see cref="Tasks"/> (and their

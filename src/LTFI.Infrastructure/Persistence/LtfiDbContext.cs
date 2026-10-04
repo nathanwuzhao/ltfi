@@ -17,6 +17,8 @@ public class LtfiDbContext(DbContextOptions<LtfiDbContext> options) : DbContext(
     public DbSet<Milestone> Milestones => Set<Milestone>();
     public DbSet<EvidenceItem> Evidence => Set<EvidenceItem>();
     public DbSet<ReflectionEntry> Reflections => Set<ReflectionEntry>();
+    public DbSet<ProjectArea> Areas => Set<ProjectArea>();
+    public DbSet<OutboxCommand> Outbox => Set<OutboxCommand>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -51,6 +53,13 @@ public class LtfiDbContext(DbContextOptions<LtfiDbContext> options) : DbContext(
             // Summed from completed focus sessions at read time, not stored.
             e.Ignore(t => t.TimeSpent);
             e.Ignore(t => t.IsExternal);
+            e.Ignore(t => t.IsPendingOnPhone);
+
+            // Removing an area leaves its tasks in the project with no area.
+            e.HasOne(t => t.Area)
+                .WithMany(a => a.Tasks)
+                .HasForeignKey(t => t.AreaId)
+                .OnDelete(DeleteBehavior.SetNull);
 
             // One local row per external item. Native tasks have NULLs here, which SQLite's
             // unique index allows any number of.
@@ -71,6 +80,26 @@ public class LtfiDbContext(DbContextOptions<LtfiDbContext> options) : DbContext(
                 .WithMany(p => p.Milestones)
                 .HasForeignKey(m => m.ProjectId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ProjectArea>(e =>
+        {
+            e.ToTable("ProjectAreas");
+            e.Property(a => a.Name).IsRequired();
+
+            e.HasOne(a => a.Project)
+                .WithMany(p => p.Areas)
+                .HasForeignKey(a => a.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<OutboxCommand>(e =>
+        {
+            e.ToTable("OutboxCommands");
+            e.Property(c => c.Op).IsRequired();
+            e.Property(c => c.ExternalUrl).IsRequired();
+            e.Property(c => c.PayloadJson).IsRequired();
+            e.HasIndex(c => c.ExternalUrl);
         });
 
         modelBuilder.Entity<TaskLabel>(e => e.Property(l => l.Name).IsRequired());

@@ -219,7 +219,8 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
             ProgressTabs.Add(row);
         }
 
-        ActiveLimitText = $"{active.Count} / {ProjectPolicy.MaxActiveProjects} LIMIT";
+        // Standing projects (e.g. Life) are listed but don't use up the limit.
+        ActiveLimitText = $"{active.Count(p => !p.IsStanding)} / {ProjectPolicy.MaxActiveProjects} LIMIT";
 
         // --- FOCUS DEBT ---
         var hours = review.FocusTimeThisWeek.TotalHours;

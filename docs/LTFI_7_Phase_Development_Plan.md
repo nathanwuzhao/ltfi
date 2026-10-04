@@ -29,7 +29,9 @@ The long-term aesthetic goal is a dense, dark, operational-intelligence-style da
 **This section supersedes Phases 4–7 below wherever they conflict.** The owner wants to actually
 *use* LTFI day to day, so the plan is re-cut around three priorities:
 
-1. **iCloud Reminders is the task system.** LTFI mirrors it rather than competing with it.
+1. **iCloud Reminders is the task system** — the *sole* source of truth (2026-10-04: LTFI can
+   no longer make local-only tasks; "New Task" creates a reminder through the outbox).
+   LTFI mirrors it rather than competing with it.
    An iPhone Shortcuts automation exports reminders as JSON to iCloud Drive. iCloud for Windows
    syncs that file to the PC, and LTFI imports it (upsert by external id). Reminder completions
    become evidence. Setup is in [`reminders-sync-setup.md`](reminders-sync-setup.md).
@@ -51,23 +53,24 @@ The long-term aesthetic goal is a dense, dark, operational-intelligence-style da
 | Contribution graph | done (`ContributionGraph.cs`, Command Center top panel) |
 | Weekly check-in v0 + gate | done (`WeeklyCheckIn.cs`, `ReflectionService`, CHK page) |
 | LLM coach backend + Review-page button | built, **on hold** (no paid OpenAI plan yet). Inert without a key; do not extend it until the owner unpauses it |
-| iCloud Reminders one-way mirror | done on the LTFI side; **needs iCloud for Windows + the iPhone Shortcut** |
+| iCloud Reminders mirror | done on the LTFI side; **needs iCloud for Windows + the iPhone Shortcut** |
+| Reminders as the sole task source: areas, Life standing project, list → project/area, URL ids, write-back outbox (create + complete) | done on the LTFI side (2026-10-04, migration `AddAreasAndOutbox`); **needs the "stamp URLs" step in LTFI Export + the new "LTFI Apply" Shortcut** — see `reminders-sync-setup.md` |
 
 ### Next (in order)
 
 1. **Make the check-in's commitments real (no LLM).** Show last week's Q5 commitments on the
    Command Center, replacing the PREVIEW panel, and review them in the next check-in. Wiring
    in the coach (Accept, Edit or Drop on its commitments) waits until the coach is unpaused.
-2. **Minimal Settings page:** reminders file path, list → project mapping, OpenAI key and model,
-   check-in day, and the policy constants.
+2. **Minimal Settings page:** reminders file path, `standingProject` / `ltfiList` / `listMap`
+   (list → project/area), OpenAI key and model, check-in day, and the policy constants.
 3. **Honest-core cleanup:**
    - fix the crash when two projects share a title (Command Center `ToDictionary` by title)
    - rename the "NO EVIDENCE" risk to "NO OUTPUT"
    - drop the dead `TaskLabel` entity and `LastActiveAt`
    - fold Today into the Command Center, or restyle it to match
 4. **Graph polish:** click a day to see that day's evidence. A per-project filter.
-5. **Reminders write-back (later):** LTFI writes `complete-requests.json`, and a second
-   Shortcut marks those reminders complete.
+5. ~~**Reminders write-back**~~ — shipped 2026-10-04 as `outbox.json` + the "LTFI Apply"
+   Shortcut (create + complete only). Editing title/due/list from LTFI is not planned.
 6. **Maybe later:** local `git log` evidence (feeds the graph), launch-on-login (so the gate
    can't be dodged), command palette, Markdown weekly report.
 

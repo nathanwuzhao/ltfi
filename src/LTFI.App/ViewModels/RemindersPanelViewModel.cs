@@ -14,7 +14,7 @@ using Serilog;
 namespace LTFI.ViewModels;
 
 /// <summary>One open reminder row: title, list-relative due text, and its slack colour.</summary>
-public sealed record ReminderRow(string Title, string DueText, IBrush DueBrush, string PriorityText);
+public sealed record ReminderRow(string Title, string DueText, IBrush DueBrush, string PriorityText, bool IsPending = false);
 
 /// <summary>Open reminders under one Reminders list.</summary>
 public sealed record ReminderGroup(string ListName, int Count, IReadOnlyList<ReminderRow> Items);
@@ -31,6 +31,7 @@ public partial class RemindersPanelViewModel : ViewModelBase
     private static readonly TimeSpan StaleAfter = TimeSpan.FromHours(24);
 
     private readonly IReminderSyncService _sync;
+    private readonly IReminderOutbox _outbox;
 
     /// <summary>Raised after a sync that changed local data, so the shell can refresh visible pages.</summary>
     public event EventHandler? Synced;
@@ -46,9 +47,15 @@ public partial class RemindersPanelViewModel : ViewModelBase
     [ObservableProperty] private string countText = "0 OPEN";
     [ObservableProperty] private string errorText = string.Empty;
 
-    public RemindersPanelViewModel(IReminderSyncService sync)
+    /// <summary>Write-back commands (create/complete) waiting for the iPhone's LTFI Apply Shortcut.</summary>
+    [ObservableProperty] private int outboxCount;
+    [ObservableProperty] private string outboxText = string.Empty;
+    [ObservableProperty] private string outboxError = string.Empty;
+
+    public RemindersPanelViewModel(IReminderSyncService sync, IReminderOutbox outbox)
     {
         _sync = sync;
+        _outbox = outbox;
     }
 
     /// <summary>Re-reads status + open reminders from the DB (no file read).</summary>
@@ -73,6 +80,12 @@ public partial class RemindersPanelViewModel : ViewModelBase
 
         HasReminders = open.Count > 0;
         CountText = $"{open.Count} OPEN";
+
+        OutboxCount = await _outbox.CountPendingAsync();
+        OutboxText = OutboxCount == 0
+            ? "OUTBOX EMPTY"
+            : $"OUTBOX {OutboxCount} → iPHONE (waiting for LTFI Apply)";
+        OutboxError = OutboxCount > 0 ? _outbox.LastError ?? string.Empty : string.Empty;
     }
 
     /// <summary>Called by the shell on start-up and every ~15s; only reads the file when it changed.</summary>
@@ -103,6 +116,8 @@ public partial class RemindersPanelViewModel : ViewModelBase
         IsSyncing = true;
         try
         {
+            // Re-write outbox.json too (e.g. the iCloud folder appeared since the last attempt).
+            await _outbox.FlushAsync();
             await AfterSyncAsync(await _sync.SyncAsync());
         }
         catch (Exception ex)
@@ -180,7 +195,7 @@ public partial class RemindersPanelViewModel : ViewModelBase
             _ => string.Empty
         };
 
-        return new ReminderRow(task.Title, dueText, brush, priority);
+        return new ReminderRow(task.Title, dueText, brush, priority, task.IsPendingOnPhone);
     }
 
     private static (string, IBrush) DueLabel(DateTime due, DateTime today)

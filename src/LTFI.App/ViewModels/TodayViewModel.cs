@@ -72,7 +72,8 @@ public partial class TodayViewModel : ViewModelBase, IRefreshable
         HasTasks = TodayTasks.Count > 0;
 
         var projects = await _projectService.GetAllAsync();
-        ActiveProjectCount = projects.Count(p => p.Status == ProjectStatus.Active);
+        // Standing projects (e.g. Life) don't count toward the limit, so they aren't counted here either.
+        ActiveProjectCount = projects.Count(p => p.Status == ProjectStatus.Active && !p.IsStanding);
 
         var snapshot = await _insights.GetTodaySnapshotAsync();
         PointsToday = snapshot.PointsToday;
