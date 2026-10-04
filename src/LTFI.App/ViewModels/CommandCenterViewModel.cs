@@ -48,6 +48,19 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
     public ObservableCollection<DebtRow> DebtLines { get; } = [];
     public ObservableCollection<CommitRow> Commitments { get; } = [];
     public ObservableCollection<HeatCell> ActivityCells { get; } = [];
+    public ObservableCollection<ContribWeekRow> ContribWeeks { get; } = [];
+
+    /// <summary>The Less → More legend swatches (Heat0–4).</summary>
+    public IReadOnlyList<IBrush> ContribLegend { get; } =
+        [CcBrush.Heat0, CcBrush.Heat1, CcBrush.Heat2, CcBrush.Heat3, CcBrush.Heat4];
+
+    // --- CONTRIBUTIONS ---
+    [ObservableProperty] private string contribSummary = "0 PTS IN THE LAST YEAR";
+    [ObservableProperty] private string contribBest = string.Empty;
+    [ObservableProperty] private string contribTotal = "0";
+    [ObservableProperty] private string contribStreak = "0d";
+    [ObservableProperty] private string contribLongest = "0d";
+    [ObservableProperty] private string contribActive = "0";
 
     // --- CURRENT OPERATION ---
     [ObservableProperty] private bool hasActiveSession;
@@ -164,6 +177,9 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
             _projectTitles[p.Id] = p.Title;
         }
 
+        // --- CONTRIBUTIONS (year graph) ---
+        await LoadContributionsAsync();
+
         var review = await _review.GetWeeklyReviewAsync();
         var snapshot = await _insights.GetTodaySnapshotAsync();
         var activity = review.ProjectActivity.ToDictionary(a => a.Title, a => a);
@@ -266,6 +282,56 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
 
         SyncCurrentOp();
     }
+
+    private async Task LoadContributionsAsync()
+    {
+        var scores = await _evidence.GetDailyScoresAsync(ContributionGraph.DefaultDays);
+        var graph = ContributionGraph.Build(scores, DateOnly.FromDateTime(DateTime.Today));
+
+        ContribWeeks.Clear();
+        foreach (var week in graph.Weeks)
+        {
+            ContribWeeks.Add(new ContribWeekRow
+            {
+                Month = week.MonthLabel is { } m
+                    ? CultureInfo.InvariantCulture.DateTimeFormat.GetAbbreviatedMonthName(m)
+                    : string.Empty,
+                Cells = week.Days.Select(c => c.Kind == ContributionCellKind.Day
+                    ? new ContribCellRow { Color = HeatLevelBrush(c.Level), Tip = ContribTip(c) }
+                    : new ContribCellRow { Color = Brushes.Transparent, Tip = null }).ToList(),
+            });
+        }
+
+        var s = graph.Stats;
+        ContribSummary = $"{s.TotalPoints.ToString("N0", CultureInfo.InvariantCulture)} PTS · {s.TotalEvents} EVENTS IN THE LAST YEAR";
+        ContribBest = s.BestDay is { } best
+            ? $"BEST DAY · {best.Day.ToString("MMM d", CultureInfo.InvariantCulture).ToUpperInvariant()} · {best.Points} PTS"
+            : string.Empty;
+        ContribTotal = s.TotalPoints.ToString("N0", CultureInfo.InvariantCulture);
+        ContribStreak = $"{s.CurrentStreak}d";
+        ContribLongest = $"{s.LongestStreak}d";
+        ContribActive = $"{s.ActiveDays}";
+    }
+
+    private static string ContribTip(ContributionCell c)
+    {
+        var date = c.Day.ToString("ddd MMM d, yyyy", CultureInfo.InvariantCulture);
+        if (c.Points <= 0)
+        {
+            return $"No contributions — {date}";
+        }
+
+        return $"{c.Points} pts · {c.Events} event{(c.Events == 1 ? "" : "s")} — {date}";
+    }
+
+    private static IBrush HeatLevelBrush(int level) => level switch
+    {
+        <= 0 => CcBrush.Heat0,
+        1 => CcBrush.Heat1,
+        2 => CcBrush.Heat2,
+        3 => CcBrush.Heat3,
+        _ => CcBrush.Heat4,
+    };
 
     private async Task LoadDeadlinesAsync(IReadOnlyList<Project> projects)
     {
@@ -591,6 +657,20 @@ public sealed class CommitRow
 public sealed class HeatCell
 {
     public IBrush Color { get; init; } = CcBrush.Heat0;
+}
+
+/// <summary>One Sunday-start column of the CONTRIBUTIONS graph; <see cref="Month"/> is its label (or empty).</summary>
+public sealed class ContribWeekRow
+{
+    public string Month { get; init; } = string.Empty;
+    public IReadOnlyList<ContribCellRow> Cells { get; init; } = [];
+}
+
+/// <summary>One day square; padding/future cells are transparent with no tooltip.</summary>
+public sealed class ContribCellRow
+{
+    public IBrush Color { get; init; } = CcBrush.Heat0;
+    public string? Tip { get; init; }
 }
 
 /// <summary>Frozen brushes matching the App.axaml palette, for computed visualisation colours.</summary>

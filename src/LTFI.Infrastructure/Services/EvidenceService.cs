@@ -51,6 +51,37 @@ public sealed class EvidenceService(IDbContextFactory<LtfiDbContext> contextFact
         return Bucket(occurredAt, days);
     }
 
+    public async Task<IReadOnlyList<DayScore>> GetDailyScoresAsync(
+        int days, CancellationToken cancellationToken = default)
+    {
+        await using var db = await _contextFactory.CreateDbContextAsync(cancellationToken);
+        var rows = await db.Evidence.AsNoTracking()
+            .Select(e => new { e.Type, e.OccurredAt })
+            .ToListAsync(cancellationToken);
+
+        days = Math.Max(1, days);
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var start = today.AddDays(-(days - 1));
+
+        // Only evidence that actually contributes (weight > 0) is counted as an event.
+        var byDay = rows
+            .Select(r => (Day: DateOnly.FromDateTime(r.OccurredAt.LocalDateTime), Weight: EvidencePoints.ForContribution(r.Type)))
+            .Where(r => r.Weight > 0 && r.Day >= start && r.Day <= today)
+            .GroupBy(r => r.Day)
+            .ToDictionary(g => g.Key, g => (Points: g.Sum(r => r.Weight), Events: g.Count()));
+
+        var result = new List<DayScore>(days);
+        for (var i = 0; i < days; i++)
+        {
+            var day = start.AddDays(i);
+            result.Add(byDay.TryGetValue(day, out var s)
+                ? new DayScore(day, s.Points, s.Events)
+                : new DayScore(day, 0, 0));
+        }
+
+        return result;
+    }
+
     public async Task<IReadOnlyList<DayActivity>> GetProjectDailyActivityAsync(
         Guid projectId, int days, CancellationToken cancellationToken = default)
     {

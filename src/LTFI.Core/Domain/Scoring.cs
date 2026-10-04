@@ -21,6 +21,17 @@ public static class EvidencePoints
 
     public static int Sum(IEnumerable<EvidenceItem> evidence) =>
         evidence.Sum(e => For(e.Type));
+
+    /// <summary>
+    /// Weight of one evidence item on the contribution graph. Scored types use their point value;
+    /// every other type (git, imported reminders, notes…) counts at least 1 so imported evidence
+    /// still lights a cell. Distraction signals are slips, not contributions, and weigh 0.
+    /// </summary>
+    public static int ForContribution(EvidenceType type) => type switch
+    {
+        EvidenceType.DistractionBlocked or EvidenceType.DistractionOverride => 0,
+        _ => Math.Max(1, For(type))
+    };
 }
 
 /// <summary>
