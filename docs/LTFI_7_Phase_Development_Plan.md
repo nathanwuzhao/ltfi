@@ -24,6 +24,75 @@ The long-term aesthetic goal is a dense, dark, operational-intelligence-style da
 
 ---
 
+## 0.1 Re-prioritization (2026-10-03) — read this first
+
+**This section supersedes Phases 4–7 below wherever they conflict.** The owner wants to actually
+*use* LTFI day to day, so the plan is re-cut around three priorities:
+
+1. **iCloud Reminders is the task system.** LTFI mirrors it rather than competing with it.
+   An iPhone Shortcuts automation exports reminders as JSON to iCloud Drive. iCloud for Windows
+   syncs that file to the PC, and LTFI imports it (upsert by external id). Reminder completions
+   become evidence. Setup is in [`reminders-sync-setup.md`](reminders-sync-setup.md).
+   CalDAV no longer works for upgraded Reminders. pyicloud (timlaing fork) is an unofficial
+   fallback that needs 2FA re-auth about every 2 months.
+2. **The contribution graph is the hero.** It is a GitHub-style 365-day grid at the top of the
+   Command Center. Each day's colour is weighted by evidence points, so everything that
+   produces evidence feeds it.
+3. **Structure through a weekly loop.** A mandatory weekly check-in has 6 fixed questions. It
+   gates the app from Sunday, with 2 snoozes of 3 hours each per week. An optional LLM coach
+   (OpenAI Responses API, structured output, key stored with DPAPI) turns the week's data plus
+   your answers into a coaching card. The coach only suggests; it never changes data.
+
+### Status
+
+| Slice | State |
+|---|---|
+| Phases 1–3 + Command Center UI | done |
+| Contribution graph | done (`ContributionGraph.cs`, Command Center top panel) |
+| Weekly check-in v0 + gate | done (`WeeklyCheckIn.cs`, `ReflectionService`, CHK page) |
+| LLM coach backend + Review-page button | done, **not yet tried against the live API** |
+| iCloud Reminders one-way mirror | done on the LTFI side; **needs iCloud for Windows + the iPhone Shortcut** |
+
+### Next (in order)
+
+1. **Connect the coach and the check-in.** Submitting a check-in offers "Ask coach". The coach
+   card's commitments get Accept, Edit or Drop. Confirmed results are saved to
+   `ReflectionEntry.StructuredSummaryJson`. Last week's commitments are shown on the Command
+   Center, replacing the PREVIEW panel.
+2. **Minimal Settings page:** reminders file path, list → project mapping, OpenAI key and model,
+   check-in day, and the policy constants.
+3. **Honest-core cleanup:**
+   - fix the crash when two projects share a title (Command Center `ToDictionary` by title)
+   - rename the "NO EVIDENCE" risk to "NO OUTPUT"
+   - drop the dead `TaskLabel` entity and `LastActiveAt`
+   - fold Today into the Command Center, or restyle it to match
+4. **Graph polish:** click a day to see that day's evidence. A per-project filter.
+5. **Reminders write-back (later):** LTFI writes `complete-requests.json`, and a second
+   Shortcut marks those reminders complete.
+6. **Maybe later:** local `git log` evidence (feeds the graph), launch-on-login (so the gate
+   can't be dodged), command palette, Markdown weekly report.
+
+### Cut (do not build)
+
+- OCaml experiments (§7.7)
+- Browser extension, local bridge, plugin HTTP API (§6.3, §6.4, §7.8)
+- App/process blocking, focus-mode allow/block lists, override system (§6.2, §6.5–6.7)
+- Logseq plugin **and** Logseq file integration (§4.3–4.5, §7.5). Reminders is the task source;
+  a second task source would compete with it.
+- FileSystemWatcher evidence (§4.6). It is noisy and would pollute the graph.
+- Sync server / data sync (§7.6) and calendar integration (§5.6)
+- The `LTFI.Application` / `LTFI.Platform.Windows` project split, plus the `integrations/` and
+  `experiments/` trees
+- Theme variants, graph relationship views, PDF reports, major/minor project limits
+
+### Deferred (fine ideas, not now)
+
+Workspace launcher (§4.1/4.2), GitHub API import (§5.1), daily LLM reflection and task
+decomposition (§5.4/5.5), the reflective kill ritual (folded into check-in Q3), and hardening:
+installer, backup UI, focus-session crash recovery.
+
+---
+
 ## 1. Known Current Context
 
 The repository is assumed to be a new .NET Avalonia MVVM application. Prior context indicates:

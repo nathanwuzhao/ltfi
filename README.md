@@ -59,5 +59,10 @@ dotnet run --project src/LTFI.App   # launch the desktop app
 All work follows the 7-phase plan in
 [docs/LTFI_7_Phase_Development_Plan.md](docs/LTFI_7_Phase_Development_Plan.md).
 Key principles: local-first, evidence over vibes, small vertical slices, and
-human-confirmed automation. **Current focus: Phase 4** — local knowledge integration
-(Logseq, filesystem, workspaces, evidence timeline), on top of the new Command Center shell.
+human-confirmed automation. **Current focus (re-cut 2026-10-03):** iCloud Reminders as
+the task source, the contribution graph, and the weekly check-in plus LLM coach. See §0.1 of the plan for
+what's done, what's next, and what was cut (Logseq, browser extension, app blocking, OCaml, sync).
+
+**Setup for the new pieces**
+- iCloud Reminders: [docs/reminders-sync-setup.md](docs/reminders-sync-setup.md)
+- LLM coach: set `OPENAI_API_KEY`, or paste a key on the Review page (it is stored DPAPI-encrypted).
