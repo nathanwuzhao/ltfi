@@ -21,6 +21,9 @@ public partial class TodayViewModel : ViewModelBase, IRefreshable
     private readonly IFocusSessionService _focus;
     private readonly IInsightsService _insights;
 
+    /// <summary>The iCloud Reminders mirror panel shown beside today's tasks.</summary>
+    public RemindersPanelViewModel Reminders { get; }
+
     /// <summary>Raised by the quick-start button with the chosen task so the shell can open Focus prefilled.</summary>
     public event EventHandler<TaskItem>? StartFocusRequested;
 
@@ -45,12 +48,14 @@ public partial class TodayViewModel : ViewModelBase, IRefreshable
         ITaskService taskService,
         IProjectService projectService,
         IFocusSessionService focus,
-        IInsightsService insights)
+        IInsightsService insights,
+        RemindersPanelViewModel reminders)
     {
         _taskService = taskService;
         _projectService = projectService;
         _focus = focus;
         _insights = insights;
+        Reminders = reminders;
     }
 
     public string SummaryText =>
@@ -75,6 +80,8 @@ public partial class TodayViewModel : ViewModelBase, IRefreshable
 
         UpdateActiveSession();
         OnPropertyChanged(nameof(SummaryText));
+
+        await Reminders.RefreshAsync();
     }
 
     private void UpdateActiveSession()

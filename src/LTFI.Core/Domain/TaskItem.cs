@@ -42,6 +42,25 @@ public class TaskItem
     /// <summary>Minimum focused time required before this task may be completed; null = no minimum.</summary>
     public TimeSpan? RequiredTime { get; set; }
 
+    /// <summary>
+    /// Where this task is mirrored from (e.g. <see cref="ReminderRules.SourceKey"/>); null for
+    /// LTFI-native tasks. Mirrored tasks are owned by the external system: a sync overwrites their
+    /// title/notes/due/priority, and an external completion bypasses the RequiredTime gate.
+    /// </summary>
+    public string? ExternalSource { get; set; }
+
+    /// <summary>Stable key within <see cref="ExternalSource"/> (unique together).</summary>
+    public string? ExternalId { get; set; }
+
+    /// <summary>The external list name (e.g. the Reminders list), kept for grouping/display.</summary>
+    public string? ExternalList { get; set; }
+
+    /// <summary>Set when the item vanished from the external source; the row is kept, never hard-deleted.</summary>
+    public DateTimeOffset? ExternalRemovedAt { get; set; }
+
+    /// <summary>True when this task mirrors an external item (derived, not stored).</summary>
+    public bool IsExternal => ExternalSource is not null;
+
     public ICollection<SubtaskItem> Subtasks { get; set; } = new List<SubtaskItem>();
 
     /// <summary>

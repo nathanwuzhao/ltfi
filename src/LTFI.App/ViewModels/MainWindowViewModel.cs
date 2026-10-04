@@ -21,6 +21,7 @@ public partial class MainWindowViewModel : ViewModelBase
 {
     private readonly IInsightsService _insights;
     private readonly IProjectService _projectService;
+    private readonly RemindersPanelViewModel _reminders;
     private readonly DispatcherTimer _clock;
     private int _tick;
 
@@ -65,10 +66,12 @@ public partial class MainWindowViewModel : ViewModelBase
         FocusViewModel focus,
         ReviewViewModel review,
         IInsightsService insights,
-        IProjectService projectService)
+        IProjectService projectService,
+        RemindersPanelViewModel reminders)
     {
         _insights = insights;
         _projectService = projectService;
+        _reminders = reminders;
         _focus_vm = focus;
         _focusNav = new NavItem("FOC", "Focus", focus);
 
@@ -95,6 +98,18 @@ public partial class MainWindowViewModel : ViewModelBase
         // Command Center's current-operation controls hand off to the Focus page.
         command.OpenFocusRequested += (_, _) => SelectedNav = _focusNav;
 
+        // A reminders sync that changed data (new tasks, iPhone completions → evidence/points)
+        // re-reads the header and the read-only overview pages. Tasks is left alone so an
+        // in-progress edit there isn't clobbered.
+        reminders.Synced += (_, _) =>
+        {
+            if (CurrentViewModel is (TodayViewModel or CommandCenterViewModel) and IRefreshable page)
+            {
+                _ = SafeRefreshAsync(page);
+            }
+            _ = RefreshHeaderAsync();
+        };
+
         UpdateClock();
         _clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _clock.Tick += (_, _) => OnClockTick();
@@ -102,6 +117,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
         SelectedNav = NavItems[0];
         _ = RefreshHeaderAsync();
+
+        // Pull the latest iPhone reminders export on start-up (then on the 15s poll below).
+        _ = _reminders.SyncIfChangedAsync();
     }
 
     partial void OnSelectedNavChanged(NavItem? value)
@@ -130,6 +148,8 @@ public partial class MainWindowViewModel : ViewModelBase
         if (++_tick % 15 == 0)
         {
             _ = RefreshHeaderAsync();
+            // Cheap when nothing changed: a stat of the export file, no read.
+            _ = _reminders.SyncIfChangedAsync();
         }
     }
 

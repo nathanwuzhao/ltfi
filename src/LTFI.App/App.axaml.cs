@@ -81,6 +81,7 @@ public partial class App : Application
         services.AddLtfiInfrastructure();
 
         services.AddSingleton<CommandCenterViewModel>();
+        services.AddSingleton<RemindersPanelViewModel>();
         services.AddSingleton<TodayViewModel>();
         services.AddSingleton<ProjectsViewModel>();
         services.AddSingleton<TasksViewModel>();

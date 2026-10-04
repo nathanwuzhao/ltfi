@@ -2,7 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using LTFI.Core.Abstractions;
 using LTFI.Infrastructure.Persistence;
+using LTFI.Infrastructure.Reminders;
 using LTFI.Infrastructure.Services;
+using LTFI.Infrastructure.Settings;
 
 namespace LTFI.Infrastructure;
 
@@ -26,6 +28,17 @@ public static class DependencyInjection
         services.AddSingleton<IInsightsService, InsightsService>();
         services.AddSingleton<IReviewService, ReviewService>();
         services.AddSingleton<IEvidenceService, EvidenceService>();
+
+        // iCloud Reminders mirror: an iPhone Shortcut exports JSON into iCloud Drive, iCloud for
+        // Windows syncs it down, and this file source reads it. Swap the source to change producer.
+        services.AddSingleton(SettingsStore.Load());
+        services.AddSingleton<IReminderSource>(sp =>
+        {
+            var reminders = sp.GetRequiredService<LtfiSettings>().Reminders;
+            return new FileReminderSource(() => SettingsStore.ResolveRemindersPath(reminders));
+        });
+        // Remembers the last snapshot version/result in memory, so it must be a singleton.
+        services.AddSingleton<IReminderSyncService, ReminderSyncService>();
 
         return services;
     }

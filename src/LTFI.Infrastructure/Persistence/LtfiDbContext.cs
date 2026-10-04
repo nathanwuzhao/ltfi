@@ -50,6 +50,11 @@ public class LtfiDbContext(DbContextOptions<LtfiDbContext> options) : DbContext(
 
             // Summed from completed focus sessions at read time, not stored.
             e.Ignore(t => t.TimeSpent);
+            e.Ignore(t => t.IsExternal);
+
+            // One local row per external item. Native tasks have NULLs here, which SQLite's
+            // unique index allows any number of.
+            e.HasIndex(t => new { t.ExternalSource, t.ExternalId }).IsUnique();
         });
 
         modelBuilder.Entity<SubtaskItem>(e =>
