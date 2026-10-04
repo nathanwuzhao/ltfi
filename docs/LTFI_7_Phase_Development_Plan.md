@@ -50,15 +50,14 @@ The long-term aesthetic goal is a dense, dark, operational-intelligence-style da
 | Phases 1–3 + Command Center UI | done |
 | Contribution graph | done (`ContributionGraph.cs`, Command Center top panel) |
 | Weekly check-in v0 + gate | done (`WeeklyCheckIn.cs`, `ReflectionService`, CHK page) |
-| LLM coach backend + Review-page button | done, **not yet tried against the live API** |
+| LLM coach backend + Review-page button | built, **on hold** (no paid OpenAI plan yet). Inert without a key; do not extend it until the owner unpauses it |
 | iCloud Reminders one-way mirror | done on the LTFI side; **needs iCloud for Windows + the iPhone Shortcut** |
 
 ### Next (in order)
 
-1. **Connect the coach and the check-in.** Submitting a check-in offers "Ask coach". The coach
-   card's commitments get Accept, Edit or Drop. Confirmed results are saved to
-   `ReflectionEntry.StructuredSummaryJson`. Last week's commitments are shown on the Command
-   Center, replacing the PREVIEW panel.
+1. **Make the check-in's commitments real (no LLM).** Show last week's Q5 commitments on the
+   Command Center, replacing the PREVIEW panel, and review them in the next check-in. Wiring
+   in the coach (Accept, Edit or Drop on its commitments) waits until the coach is unpaused.
 2. **Minimal Settings page:** reminders file path, list → project mapping, OpenAI key and model,
    check-in day, and the policy constants.
 3. **Honest-core cleanup:**

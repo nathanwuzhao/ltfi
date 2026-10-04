@@ -27,8 +27,9 @@ gate does not apply. Ticking reminders off *from* LTFI ("write-back") is a later
 3. After the first export (step 3), open File Explorer → **iCloud Drive → Shortcuts → LTFI**, right-click the
    folder → **Always keep on this device**. Otherwise the file can stay a cloud-only placeholder.
 4. LTFI looks in these places, in order:
-   - `%USERPROFILE%\iCloudDrive\LTFI\reminders.jsonl.json` (or `.jsonl`)
-   - `%USERPROFILE%\iCloud Drive\Shortcuts\LTFI\reminders.json` (or `.jsonl`)
+   - `%USERPROFILE%\iCloudDrive\LTFI\reminders.jsonl.json` (the owner's current setup;
+     `reminders.json` and `reminders.jsonl` also work)
+   - the same names under `iCloud Drive\LTFI\` and the older `Shortcuts\LTFI\` folders
 
    If yours is somewhere else, set it in `%AppData%\LTFI\settings.json`, which LTFI creates on first run:
    ```json
@@ -81,10 +82,16 @@ Shortcuts app → **+** → name it **LTFI Export**.
    - If the result isn't a proper array on your iOS version, fall back to:
      *Repeat Results* → **Combine Text** with New Lines → save as **`reminders.jsonl`**.
      LTFI accepts that too.
-6. **Save File** → Service: **iCloud Drive**, path **`/LTFI/reminders.json`** (inside the Shortcuts
-   folder). Turn *Ask Where to Save* OFF and *Overwrite If File Exists* ON.
+6. **Save File** → Service: **iCloud Drive**, path **`/LTFI/reminders.jsonl`** (at the iCloud Drive
+   root; Save File appends `.json`, giving `reminders.jsonl.json`). Turn *Ask Where to Save* OFF and
+   *Overwrite If File Exists* ON.
 
-Run it once by hand, then check that `reminders.json` appears on the PC.
+Run it once by hand, then check that `reminders.jsonl.json` appears on the PC.
+
+> **As built by the owner (2026-10-04):** the dictionary keys are `title, notes, list, dueDate,
+> priority, isCompleted, completionDate, creationDate` (no `id`, `isFlagged`, `url`).
+> `isCompleted` comes through as `"Yes"`/`"No"` and empty dates as `""`. The parser handles
+> all of these.
 
 ## 3. iPhone: make it automatic
 
