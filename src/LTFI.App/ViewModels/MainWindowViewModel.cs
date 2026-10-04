@@ -21,6 +21,7 @@ public partial class MainWindowViewModel : ViewModelBase
 {
     private readonly IInsightsService _insights;
     private readonly IProjectService _projectService;
+    private readonly IReflectionService _reflections;
     private readonly DispatcherTimer _clock;
     private int _tick;
 
@@ -54,8 +55,20 @@ public partial class MainWindowViewModel : ViewModelBase
     /// <summary>True when the (unlisted, bottom-pinned) Settings page is showing.</summary>
     public bool IsSettingsActive => CurrentViewModel == SettingsNav.ViewModel;
 
+    /// <summary>
+    /// True while the weekly check-in is due and not snoozed: the shell pins the Check-In page and
+    /// disables the rail until the user submits or snoozes.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsNavEnabled))]
+    private bool isGated;
+
+    public bool IsNavEnabled => !IsGated;
+
     private readonly NavItem _focusNav;
     private readonly FocusViewModel _focus_vm;
+    private readonly NavItem _checkInNav;
+    private readonly CheckInViewModel _checkIn;
 
     public MainWindowViewModel(
         CommandCenterViewModel command,
@@ -64,11 +77,16 @@ public partial class MainWindowViewModel : ViewModelBase
         TasksViewModel tasks,
         FocusViewModel focus,
         ReviewViewModel review,
+        CheckInViewModel checkIn,
         IInsightsService insights,
-        IProjectService projectService)
+        IProjectService projectService,
+        IReflectionService reflections)
     {
         _insights = insights;
         _projectService = projectService;
+        _reflections = reflections;
+        _checkIn = checkIn;
+        _checkInNav = new NavItem("CHK", "Check-In", checkIn);
         _focus_vm = focus;
         _focusNav = new NavItem("FOC", "Focus", focus);
 
@@ -80,6 +98,7 @@ public partial class MainWindowViewModel : ViewModelBase
             new NavItem("TSK", "Tasks", tasks),
             _focusNav,
             new NavItem("REV", "Review", review),
+            _checkInNav,
         ];
 
         SettingsNav = new NavItem("SET", "Settings", new PlaceholderViewModel(
@@ -95,6 +114,13 @@ public partial class MainWindowViewModel : ViewModelBase
         // Command Center's current-operation controls hand off to the Focus page.
         command.OpenFocusRequested += (_, _) => SelectedNav = _focusNav;
 
+        // Submitting or snoozing the check-in lifts the gate (re-checked against the service).
+        checkIn.GateCleared += (_, _) =>
+        {
+            _ = CheckGateAsync();
+            _ = RefreshHeaderAsync();
+        };
+
         UpdateClock();
         _clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _clock.Tick += (_, _) => OnClockTick();
@@ -102,6 +128,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         SelectedNav = NavItems[0];
         _ = RefreshHeaderAsync();
+        _ = CheckGateAsync();
     }
 
     partial void OnSelectedNavChanged(NavItem? value)
@@ -130,6 +157,7 @@ public partial class MainWindowViewModel : ViewModelBase
         if (++_tick % 15 == 0)
         {
             _ = RefreshHeaderAsync();
+            _ = CheckGateAsync();
         }
     }
 
@@ -156,8 +184,46 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Raises or lowers the weekly check-in gate. Runs at launch and on the 15s refresh, so a
+    /// snooze expiring mid-session brings the check-in back.
+    /// </summary>
+    private async Task CheckGateAsync()
+    {
+        try
+        {
+            var status = await _reflections.GetWeeklyCheckInStatusAsync();
+            if (status.MustShow && !IsGated)
+            {
+                IsGated = true;
+                if (SelectedNav == _checkInNav)
+                {
+                    await SafeRefreshAsync(_checkIn);
+                }
+                else
+                {
+                    SelectedNav = _checkInNav;
+                }
+            }
+            else if (!status.MustShow && IsGated)
+            {
+                IsGated = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to check the weekly check-in gate");
+        }
+    }
+
     [RelayCommand]
-    private void OpenSettings() => SelectedNav = SettingsNav;
+    private void OpenSettings()
+    {
+        if (!IsGated)
+        {
+            SelectedNav = SettingsNav;
+        }
+    }
 
     private static async Task SafeRefreshAsync(IRefreshable refreshable)
     {
