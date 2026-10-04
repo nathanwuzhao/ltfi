@@ -11,6 +11,109 @@
     <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
         <StackPanel x:Name="RootStack" Margin="9" Spacing="8">
 
+            <!-- ==== CONTRIBUTIONS (full width, the headline year graph) ==== -->
+            <Border Classes="panel">
+                <StackPanel>
+                    <Border Classes="panel-hd">
+                        <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                            <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{DynamicResource AccentBrush}"/>
+                            <TextBlock Grid.Column="1" Classes="micro" Text="CONTRIBUTIONS" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="2" Classes="micro-dim" Margin="10,0,8,0" TextTrimming="CharacterEllipsis"
+                                       Text="{Binding ContribSummary}" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="3" Classes="micro-dim" Text="{Binding ContribBest}" VerticalAlignment="Center"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- graph (fixed ~770px) | stat strip (takes the rest) -->
+                    <Grid ColumnDefinitions="Auto,*" Margin="13,10,13,11">
+                        <StackPanel Spacing="6">
+                            <StackPanel Orientation="Horizontal">
+                                <!-- weekday labels: 14px month-row spacer, then 7 rows of 11px + 3px gaps -->
+                                <StackPanel Width="28" Spacing="3" Margin="0,17,0,0">
+                                    <Panel Height="11"/>
+                                    <TextBlock Height="11" FontSize="8.5" Classes="faint" Text="Mon"/>
+                                    <Panel Height="11"/>
+                                    <TextBlock Height="11" FontSize="8.5" Classes="faint" Text="Wed"/>
+                                    <Panel Height="11"/>
+                                    <TextBlock Height="11" FontSize="8.5" Classes="faint" Text="Fri"/>
+                                    <Panel Height="11"/>
+                                </StackPanel>
+
+                                <ItemsControl ItemsSource="{Binding ContribWeeks}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="3"/></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:ContribWeekRow">
+                                            <StackPanel Width="11" Spacing="3">
+                                                <!-- Canvas doesn't clip, so a 3-letter month can overhang its 11px column -->
+                                                <Canvas Height="14">
+                                                    <TextBlock FontSize="8.5" Classes="dim" Text="{Binding Month}"/>
+                                                </Canvas>
+                                                <ItemsControl ItemsSource="{Binding Cells}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate><StackPanel Spacing="3"/></ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:ContribCellRow">
+                                                            <Border Width="11" Height="11" CornerRadius="2" Background="{Binding Color}"
+                                                                    ToolTip.Tip="{Binding Tip}" ToolTip.ShowDelay="150"/>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <!-- Less → More legend -->
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="3">
+                                <TextBlock FontSize="8.5" Classes="faint" Margin="0,0,4,0" VerticalAlignment="Center" Text="Less"/>
+                                <ItemsControl ItemsSource="{Binding ContribLegend}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="3"/></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="IBrush">
+                                            <Border Width="11" Height="11" CornerRadius="2" Background="{Binding}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock FontSize="8.5" Classes="faint" Margin="4,0,0,0" VerticalAlignment="Center" Text="More"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- stat strip -->
+                        <Border Grid.Column="1" Margin="18,17,0,0" Padding="18,0,0,0" VerticalAlignment="Top"
+                                BorderBrush="{DynamicResource BorderInnerBrush}" BorderThickness="1,0,0,0">
+                            <UniformGrid Columns="2" Rows="2">
+                                <StackPanel Spacing="2" Margin="0,0,10,14">
+                                    <TextBlock Classes="faint" FontSize="9" Text="YEAR TOTAL"/>
+                                    <TextBlock Classes="num bright" FontSize="20" FontWeight="Bold" Text="{Binding ContribTotal}"/>
+                                    <TextBlock Classes="dim" FontSize="9" Text="points"/>
+                                </StackPanel>
+                                <StackPanel Spacing="2" Margin="0,0,0,14">
+                                    <TextBlock Classes="faint" FontSize="9" Text="CURRENT STREAK"/>
+                                    <TextBlock Classes="num" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" Text="{Binding ContribStreak}"/>
+                                    <TextBlock Classes="dim" FontSize="9" Text="consecutive days"/>
+                                </StackPanel>
+                                <StackPanel Spacing="2" Margin="0,0,10,0">
+                                    <TextBlock Classes="faint" FontSize="9" Text="LONGEST STREAK"/>
+                                    <TextBlock Classes="num bright" FontSize="20" FontWeight="Bold" Text="{Binding ContribLongest}"/>
+                                    <TextBlock Classes="dim" FontSize="9" Text="this year"/>
+                                </StackPanel>
+                                <StackPanel Spacing="2">
+                                    <TextBlock Classes="faint" FontSize="9" Text="ACTIVE DAYS"/>
+                                    <TextBlock Classes="num bright" FontSize="20" FontWeight="Bold" Text="{Binding ContribActive}"/>
+                                    <TextBlock Classes="dim" FontSize="9" Text="of 365"/>
+                                </StackPanel>
+                            </UniformGrid>
+                        </Border>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
             <!-- top area: wide left column + narrow right column (no grid spanning) -->
             <Grid ColumnDefinitions="1.6*,*">
 

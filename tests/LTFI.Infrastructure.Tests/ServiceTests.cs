@@ -492,4 +492,38 @@ public class ServiceTests
         }
         finally { Cleanup(path); }
     }
+
+    [Fact]
+    public async Task Daily_scores_weight_evidence_per_day()
+    {
+        var path = await NewMigratedDbAsync();
+        try
+        {
+            var factory = new TestDbFactory(path);
+            var now = DateTimeOffset.Now;
+            await using (var db = factory.CreateDbContext())
+            {
+                db.Evidence.AddRange(
+                    new EvidenceItem { Type = EvidenceType.TaskCompleted, Title = "t", OccurredAt = now },
+                    new EvidenceItem { Type = EvidenceType.GitCommit, Source = "git", Title = "c", OccurredAt = now },
+                    new EvidenceItem { Type = EvidenceType.DistractionOverride, Title = "slip", OccurredAt = now },
+                    new EvidenceItem { Type = EvidenceType.FocusSessionCompleted, Title = "f", OccurredAt = now.AddDays(-1) },
+                    new EvidenceItem { Type = EvidenceType.TaskCompleted, Title = "old", OccurredAt = now.AddDays(-400) });
+                await db.SaveChangesAsync();
+            }
+
+            var scores = await new EvidenceService(factory).GetDailyScoresAsync(365);
+
+            Assert.Equal(365, scores.Count);
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            Assert.Equal(today, scores[^1].Day);
+            Assert.Equal(today.AddDays(-364), scores[0].Day);
+
+            // Task 10 + commit floored to 1; the distraction slip contributes nothing.
+            Assert.Equal(new DayScore(today, 11, 2), scores[^1]);
+            Assert.Equal(new DayScore(today.AddDays(-1), 5, 1), scores[^2]);
+            Assert.Equal(16, scores.Sum(s => s.Points));
+        }
+        finally { Cleanup(path); }
+    }
 }

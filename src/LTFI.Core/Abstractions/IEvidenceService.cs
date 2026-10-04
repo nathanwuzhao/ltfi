@@ -35,6 +35,11 @@ public interface IEvidenceService
     /// (oldest first, one entry per day including zero-activity days).</summary>
     Task<IReadOnlyList<DayActivity>> GetDailyActivityAsync(int days, CancellationToken cancellationToken = default);
 
+    /// <summary>Per-day weighted contribution points (<see cref="EvidencePoints.ForContribution"/>)
+    /// and contributing-event counts for the trailing <paramref name="days"/> days, oldest first,
+    /// one entry per day including zeros. Drives the contribution graph.</summary>
+    Task<IReadOnlyList<DayScore>> GetDailyScoresAsync(int days, CancellationToken cancellationToken = default);
+
     /// <summary>Per-day evidence counts for one project over the trailing <paramref name="days"/> days.</summary>
     Task<IReadOnlyList<DayActivity>> GetProjectDailyActivityAsync(
         Guid projectId, int days, CancellationToken cancellationToken = default);
