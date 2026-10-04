@@ -26,6 +26,10 @@ public static class DependencyInjection
         services.AddSingleton<IInsightsService, InsightsService>();
         services.AddSingleton<IReviewService, ReviewService>();
         services.AddSingleton<IEvidenceService, EvidenceService>();
+        // Snooze state lives in a small JSON file beside the database (no schema change).
+        services.AddSingleton<ICheckInSnoozeStore>(_ =>
+            new JsonCheckInSnoozeStore(System.IO.Path.Combine(DbPaths.AppDataDirectory, "checkin-snooze.json")));
+        services.AddSingleton<IReflectionService, ReflectionService>();
 
         return services;
     }

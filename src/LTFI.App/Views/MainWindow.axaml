@@ -81,6 +81,7 @@
                     BorderThickness="0,0,1,0">
                 <Grid RowDefinitions="*,Auto">
                     <ListBox Classes="rail"
+                             IsEnabled="{Binding IsNavEnabled}"
                              ItemsSource="{Binding NavItems}"
                              SelectedItem="{Binding SelectedNav, Mode=TwoWay}">
                         <ListBox.ItemTemplate>
@@ -95,6 +96,7 @@
                     <!-- bottom-pinned Settings (not part of the selectable list) -->
                     <Button Grid.Row="1"
                             Command="{Binding OpenSettingsCommand}"
+                            IsEnabled="{Binding IsNavEnabled}"
                             Background="Transparent" BorderThickness="0" Padding="0"
                             HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                         <Border Classes="rail-item"

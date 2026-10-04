@@ -1,0 +1,134 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:LTFI.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1180" d:DesignHeight="900"
+             x:Class="LTFI.Views.CheckInView"
+             x:DataType="vm:CheckInViewModel"
+             Background="{DynamicResource BgWindowBrush}">
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="9" Spacing="8">
+
+            <!-- header strip: title + due status -->
+            <Border Classes="panel">
+                <Grid Margin="12,10" ColumnDefinitions="Auto,*">
+                    <TextBlock Classes="page-title" Text="{Binding Header}" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Margin="16,0,0,0" FontSize="11" TextWrapping="Wrap"
+                               VerticalAlignment="Center" Text="{Binding StatusText}"
+                               Foreground="{DynamicResource WarningBrush}" IsVisible="{Binding IsDue}"/>
+                    <TextBlock Grid.Column="1" Margin="16,0,0,0" FontSize="11" TextWrapping="Wrap"
+                               VerticalAlignment="Center" Text="{Binding StatusText}"
+                               Foreground="{DynamicResource AccentBrush}" IsVisible="{Binding !IsDue}"/>
+                </Grid>
+            </Border>
+
+            <Grid ColumnDefinitions="1.6*,*" ColumnSpacing="8">
+
+                <!-- ==== LEFT: the questions ==== -->
+                <Border Classes="panel" VerticalAlignment="Top">
+                    <StackPanel>
+                        <Border Classes="panel-hd">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Classes="micro" Text="QUESTIONS"/>
+                                <TextBlock Grid.Column="1" Classes="micro-dim" Text="WEEKLY-CHECKIN-V1"/>
+                            </Grid>
+                        </Border>
+
+                        <ItemsControl ItemsSource="{Binding Questions}" Margin="12,8,12,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:CheckInQuestion">
+                                    <StackPanel Spacing="5" Margin="0,0,0,12">
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <TextBlock Classes="num faint" FontSize="10.5" FontWeight="Bold"
+                                                       Margin="0,0,10,0" Text="{Binding Number}"/>
+                                            <TextBlock Grid.Column="1" Classes="bright" FontSize="11.5"
+                                                       TextWrapping="Wrap" Text="{Binding Prompt}"/>
+                                            <TextBlock Grid.Column="2" Classes="micro-dim" Margin="8,0,0,0"
+                                                       Foreground="{DynamicResource WarningBrush}"
+                                                       Text="{Binding RequiredMark}"/>
+                                        </Grid>
+                                        <TextBox Text="{Binding Answer, Mode=TwoWay}"
+                                                 AcceptsReturn="True" TextWrapping="Wrap"
+                                                 MinHeight="54" FontSize="11.5"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Border BorderBrush="{DynamicResource BorderInnerBrush}" BorderThickness="0,1,0,0" Padding="12,9">
+                            <StackPanel Spacing="8">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button Classes="primary" Content="SUBMIT CHECK-IN" Command="{Binding SubmitCommand}"/>
+                                    <Button Classes="ghost" Content="{Binding SnoozeLabel}" Command="{Binding SnoozeCommand}"
+                                            IsVisible="{Binding IsDue}"/>
+                                </StackPanel>
+                                <TextBlock Foreground="{DynamicResource WarningBrush}" FontSize="11"
+                                           TextWrapping="Wrap" Text="{Binding FeedbackMessage}"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- ==== RIGHT: context + history ==== -->
+                <StackPanel Grid.Column="1" Spacing="8">
+
+                    <!-- this week's numbers (deterministic review) -->
+                    <Border Classes="panel">
+                        <StackPanel>
+                            <Border Classes="panel-hd">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Classes="micro" Text="THIS WEEK"/>
+                                    <TextBlock Grid.Column="1" Classes="micro-dim" Text="TRAILING 7D"/>
+                                </Grid>
+                            </Border>
+                            <Grid ColumnDefinitions="*,*,*,*" Margin="12,10">
+                                <StackPanel Spacing="3">
+                                    <TextBlock Classes="micro-dim" Text="FOCUS"/>
+                                    <TextBlock Classes="num bright" FontSize="17" FontWeight="Bold" Text="{Binding FocusText}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="3">
+                                    <TextBlock Classes="micro-dim" Text="TASKS DONE"/>
+                                    <TextBlock Classes="num bright" FontSize="17" FontWeight="Bold" Text="{Binding TasksCompleted}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Spacing="3">
+                                    <TextBlock Classes="micro-dim" Text="STALLED"/>
+                                    <TextBlock Classes="num bright" FontSize="17" FontWeight="Bold" Text="{Binding StalledCount}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="3" Spacing="3">
+                                    <TextBlock Classes="micro-dim" Text="ACTIVE"/>
+                                    <TextBlock Classes="num bright" FontSize="17" FontWeight="Bold" Text="{Binding ActiveText}"/>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- past check-ins -->
+                    <Border Classes="panel">
+                        <StackPanel>
+                            <Border Classes="panel-hd">
+                                <TextBlock Classes="micro" Text="PAST CHECK-INS"/>
+                            </Border>
+                            <ItemsControl ItemsSource="{Binding History}" IsVisible="{Binding HasHistory}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:CheckInHistoryItem">
+                                        <Border Padding="12,8" BorderBrush="{DynamicResource BorderRowBrush}" BorderThickness="0,0,0,1">
+                                            <StackPanel Spacing="4">
+                                                <TextBlock Classes="micro-dim" Text="{Binding DateText}"/>
+                                                <TextBlock Classes="bright" FontSize="11" TextWrapping="Wrap" Text="{Binding Commitments}"/>
+                                                <TextBlock Classes="dim" FontSize="10.5" TextWrapping="Wrap" Text="{Binding Summary}"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Classes="faint" FontSize="10.5" Margin="12,10" IsVisible="{Binding !HasHistory}"
+                                       Text="No check-ins yet. Your commitments will show here."/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

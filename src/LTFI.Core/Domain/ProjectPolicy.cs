@@ -1,3 +1,5 @@
+using System;
+
 namespace LTFI.Core.Domain;
 
 /// <summary>
@@ -14,4 +16,13 @@ public static class ProjectPolicy
 
     /// <summary>Target focused hours per week; drives the Command Center "focus debt" meter.</summary>
     public const double WeeklyFocusTargetHours = 15.0;
+
+    /// <summary>The weekly check-in falls due at 00:00 local on this day.</summary>
+    public const DayOfWeek WeeklyCheckInDay = DayOfWeek.Sunday;
+
+    /// <summary>How many times per check-in week the gate may be snoozed before only submitting clears it.</summary>
+    public const int MaxCheckInSnoozesPerWeek = 2;
+
+    /// <summary>Length of one check-in snooze.</summary>
+    public const int CheckInSnoozeHours = 3;
 }

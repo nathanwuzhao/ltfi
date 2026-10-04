@@ -86,6 +86,7 @@ public partial class App : Application
         services.AddSingleton<TasksViewModel>();
         services.AddSingleton<FocusViewModel>();
         services.AddSingleton<ReviewViewModel>();
+        services.AddSingleton<CheckInViewModel>();
         services.AddSingleton<MainWindowViewModel>();
 
         return services.BuildServiceProvider();
