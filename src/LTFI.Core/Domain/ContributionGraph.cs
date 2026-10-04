@@ -24,7 +24,7 @@ public enum ContributionCellKind
 public sealed record ContributionCell(DateOnly Day, int Points, int Events, int Level, ContributionCellKind Kind);
 
 /// <summary>
-/// One column of the graph: Sunday â†’ Saturday. <see cref="MonthLabel"/> is the month number (1â€“12)
+/// One column of the graph: Sunday → Saturday. <see cref="MonthLabel"/> is the month number (1–12)
 /// when this column starts a new month and should carry a label, otherwise null.
 /// </summary>
 public sealed record ContributionWeek(DateOnly WeekStart, IReadOnlyList<ContributionCell> Days, int? MonthLabel);
@@ -41,7 +41,7 @@ public sealed record ContributionStats(
 /// <summary>
 /// A GitHub-style contribution graph (the Command Center's headline panel): the trailing
 /// <c>days</c> window ending today, laid out as Sunday-start week columns Ã— 7 weekday rows.
-/// Intensity levels follow GitHub's approach â€” quartiles of the non-zero days â€” so the ramp
+/// Intensity levels follow GitHub's approach — quartiles of the non-zero days — so the ramp
 /// adapts to however much the user actually does, and the best day is always the brightest.
 /// Pure: callers supply per-day scores and "today".
 /// </summary>
