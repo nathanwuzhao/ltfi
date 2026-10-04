@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using LTFI.Core.Abstractions;
+using LTFI.Infrastructure.Llm;
 using LTFI.Infrastructure.Persistence;
 using LTFI.Infrastructure.Services;
 
@@ -30,6 +31,15 @@ public static class DependencyInjection
         services.AddSingleton<ICheckInSnoozeStore>(_ =>
             new JsonCheckInSnoozeStore(System.IO.Path.Combine(DbPaths.AppDataDirectory, "checkin-snooze.json")));
         services.AddSingleton<IReflectionService, ReflectionService>();
+
+        // Optional LLM coach (plan §5.3). Registered unconditionally: with no key the provider just
+        // reports IsConfigured=false, so the app always starts and the UI shows a setup hint.
+        services.AddSingleton(_ => LlmSettings.Load(Path.Combine(DbPaths.AppDataDirectory, LlmSettings.FileName)));
+        services.AddSingleton<IApiKeyStore>(_ =>
+            new DpapiApiKeyStore(Path.Combine(DbPaths.AppDataDirectory, DpapiApiKeyStore.FileName)));
+        services.AddSingleton<ILlmProvider>(sp =>
+            new OpenAiProvider(new HttpClient(), sp.GetRequiredService<LlmSettings>(), sp.GetRequiredService<IApiKeyStore>()));
+        services.AddSingleton<ICoachService, CoachService>();
 
         return services;
     }

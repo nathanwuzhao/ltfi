@@ -93,6 +93,144 @@
             </Border>
             <TextBlock Classes="muted" IsVisible="{Binding !HasStalled}"
                        Text="No stalled active projects. Nice."/>
+
+            <!-- LLM coach (optional, display-only: suggestions never mutate data) -->
+            <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,8,0,0">
+                <TextBlock Classes="section-header" Text="COACH" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Classes="micro-dim" Margin="10,0,0,0" VerticalAlignment="Center"
+                           Text="{Binding CoachStatusText}"/>
+                <Button Grid.Column="2" Classes="primary" Content="{Binding CoachButtonText}"
+                        Command="{Binding AskCoachCommand}" IsEnabled="{Binding !IsCoachBusy}"/>
+            </Grid>
+
+            <!-- Not configured: how to set the key -->
+            <Border Classes="card" IsVisible="{Binding !IsCoachConfigured}">
+                <StackPanel Spacing="8">
+                    <TextBlock Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap"
+                               Text="OpenAI key not configured — set the OPENAI_API_KEY environment variable, or paste a key here (stored encrypted to your Windows user, never in the database)."/>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBox PasswordChar="•" PlaceholderText="sk-…" Text="{Binding ApiKeyInput}"/>
+                        <Button Grid.Column="1" Classes="ghost" Margin="8,0,0,0" Content="SAVE KEY"
+                                Command="{Binding SaveApiKeyCommand}"/>
+                    </Grid>
+                    <TextBlock Classes="faint" FontSize="10" TextWrapping="Wrap"
+                               Text="Model / base URL: %AppData%/LTFI/llm-settings.json (optional). The coach sends this week's numbers and evidence titles to the endpoint with store:false."/>
+                </StackPanel>
+            </Border>
+
+            <Border Classes="card" IsVisible="{Binding HasCoachError}" BorderBrush="{DynamicResource WarningBrush}">
+                <TextBlock Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" Text="{Binding CoachError}"/>
+            </Border>
+
+            <TextBlock Classes="muted" IsVisible="{Binding IsCoachBusy}" Text="Asking the coach… (usually 10-30s)"/>
+
+            <!-- The card -->
+            <Border Classes="card" IsVisible="{Binding HasCoachReport}">
+                <StackPanel Spacing="12">
+                    <TextBlock Classes="bright" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Text="{Binding CoachHeadline}"/>
+                    <TextBlock Classes="dim" FontSize="11" TextWrapping="Wrap" IsVisible="{Binding HasCoachCaveat}" Text="{Binding CoachCaveat}"/>
+
+                    <TextBlock Classes="micro" Text="WINS"/>
+                    <ItemsControl ItemsSource="{Binding CoachWins}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="abs:CoachWin">
+                                <StackPanel Margin="0,2">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Foreground="{DynamicResource SuccessBrush}" Text="✓"/>
+                                        <TextBlock TextWrapping="Wrap" Text="{Binding Text}"/>
+                                    </StackPanel>
+                                    <TextBlock Classes="dim" FontSize="10.5" Margin="16,0,0,0" TextWrapping="Wrap" Text="{Binding Evidence}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Classes="micro" Text="PATTERNS"/>
+                    <ItemsControl ItemsSource="{Binding CoachPatterns}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="abs:CoachPattern">
+                                <Grid ColumnDefinitions="64,*" Margin="0,2">
+                                    <TextBlock Classes="micro-dim" Text="{Binding Effect}"/>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock TextWrapping="Wrap" Text="{Binding Observation}"/>
+                                        <TextBlock Classes="dim" FontSize="10.5" TextWrapping="Wrap" Text="{Binding Evidence}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Classes="micro" Text="LAST WEEK" IsVisible="{Binding HasCoachLastWeek}"/>
+                    <ItemsControl ItemsSource="{Binding CoachLastWeek}" IsVisible="{Binding HasCoachLastWeek}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="abs:CoachLastWeekItem">
+                                <Grid ColumnDefinitions="64,*" Margin="0,2">
+                                    <TextBlock Classes="micro-dim" Text="{Binding Status}"/>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock TextWrapping="Wrap" Text="{Binding Commitment}"/>
+                                        <TextBlock Classes="dim" FontSize="10.5" TextWrapping="Wrap" Text="{Binding Note}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Classes="micro" Text="SUGGESTED COMMITMENTS"/>
+                    <ItemsControl ItemsSource="{Binding CoachCommitments}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="abs:CoachCommitment">
+                                <Border BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1" Padding="10,8" Margin="0,0,0,6">
+                                    <StackPanel Spacing="3">
+                                        <TextBlock Classes="bright" FontWeight="SemiBold" TextWrapping="Wrap" Text="{Binding Title}"/>
+                                        <TextBlock Classes="dim" FontSize="10.5" TextWrapping="Wrap" Text="{Binding Why}"/>
+                                        <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource AccentBrush}"
+                                                   Text="{Binding FirstStep, StringFormat='▶ {0}'}"/>
+                                        <TextBlock Classes="muted" FontSize="10.5" Text="{Binding FirstStepMinutes, StringFormat='first step ≤ {0} min'}"/>
+                                        <TextBlock Classes="muted" FontSize="10.5" TextWrapping="Wrap" Text="{Binding WhenWhere, StringFormat='when/where: {0}'}"/>
+                                        <TextBlock Classes="muted" FontSize="10.5" TextWrapping="Wrap" Text="{Binding IfThen}"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Classes="micro" Text="RISKS"/>
+                    <ItemsControl ItemsSource="{Binding CoachRisks}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="abs:CoachRisk">
+                                <StackPanel Margin="0,2">
+                                    <TextBlock TextWrapping="Wrap" Text="{Binding Risk}"/>
+                                    <TextBlock Classes="dim" FontSize="10.5" TextWrapping="Wrap" Text="{Binding IfThen}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Classes="micro" Text="PAUSE / DROP?" IsVisible="{Binding HasCoachDropOrPause}"/>
+                    <ItemsControl ItemsSource="{Binding CoachDropOrPause}" IsVisible="{Binding HasCoachDropOrPause}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="abs:CoachDropOrPause">
+                                <Grid ColumnDefinitions="64,*" Margin="0,2">
+                                    <TextBlock Foreground="{DynamicResource WarningBrush}" FontSize="10" Text="{Binding Action}"/>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock TextWrapping="Wrap" Text="{Binding Item}"/>
+                                        <TextBlock Classes="dim" FontSize="10.5" TextWrapping="Wrap" Text="{Binding Reason}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Classes="micro" Text="SIT WITH THIS"/>
+                    <TextBlock Classes="bright" TextWrapping="Wrap" FontStyle="Italic" Text="{Binding CoachQuestion}"/>
+
+                    <TextBlock Classes="faint" FontSize="10" TextWrapping="Wrap" Text="{Binding CoachMeta}"/>
+                </StackPanel>
+            </Border>
+
+            <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding IsCoachConfigured}">
+                <Button Grid.Column="1" Classes="ghost" Content="REMOVE SAVED KEY" Command="{Binding ClearApiKeyCommand}"/>
+            </Grid>
         </StackPanel>
     </ScrollViewer>
 </UserControl>
