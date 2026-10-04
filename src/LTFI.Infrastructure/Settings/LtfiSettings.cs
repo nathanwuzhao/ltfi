@@ -61,21 +61,25 @@ public static class SettingsStore
     }
 
     /// <summary>
-    /// iCloud for Windows exposes the Shortcuts app's iCloud Drive folder as either
-    /// <c>%USERPROFILE%\iCloudDrive\Shortcuts</c> or <c>%USERPROFILE%\iCloud Drive\Shortcuts</c>
-    /// depending on the build; the Shortcut saves into its <c>LTFI</c> subfolder.
+    /// iCloud for Windows mounts iCloud Drive at <c>%USERPROFILE%\iCloudDrive</c> or
+    /// <c>%USERPROFILE%\iCloud Drive</c> depending on the build. The Shortcut saves into an
+    /// <c>LTFI</c> folder at the Drive root (or, older setups, under <c>Shortcuts\LTFI</c>).
+    /// Save File appends <c>.json</c> to a text output, hence <c>reminders.jsonl.json</c>.
     /// </summary>
     public static IReadOnlyList<string> DefaultRemindersCandidates()
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var folders = new[]
         {
+            Path.Combine(home, "iCloudDrive", "LTFI"),
+            Path.Combine(home, "iCloud Drive", "LTFI"),
             Path.Combine(home, "iCloudDrive", "Shortcuts", "LTFI"),
             Path.Combine(home, "iCloud Drive", "Shortcuts", "LTFI")
         };
+        var names = new[] { "reminders.jsonl.json", "reminders.json", "reminders.jsonl" };
 
         return folders
-            .SelectMany(f => new[] { Path.Combine(f, "reminders.json"), Path.Combine(f, "reminders.jsonl") })
+            .SelectMany(f => names.Select(n => Path.Combine(f, n)))
             .ToList();
     }
 

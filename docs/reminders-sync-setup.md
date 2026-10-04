@@ -4,8 +4,8 @@ LTFI keeps a read-only copy of your iCloud Reminders. Apple has no Reminders API
 the **iPhone does the exporting**:
 
 ```
-iPhone Shortcut "LTFI Export"  →  iCloud Drive/Shortcuts/LTFI/reminders.json
-      →  iCloud for Windows  →  %USERPROFILE%\iCloudDrive\Shortcuts\LTFI\reminders.json
+iPhone Shortcut "LTFI Export"  →  iCloud Drive/LTFI/reminders.jsonl.json
+      →  iCloud for Windows  →  %USERPROFILE%\iCloudDrive\LTFI\reminders.jsonl.json
       →  LTFI (checks the file every 15 s, and SYNC on the Today page)
 ```
 
@@ -27,7 +27,7 @@ gate does not apply. Ticking reminders off *from* LTFI ("write-back") is a later
 3. After the first export (step 3), open File Explorer → **iCloud Drive → Shortcuts → LTFI**, right-click the
    folder → **Always keep on this device**. Otherwise the file can stay a cloud-only placeholder.
 4. LTFI looks in these places, in order:
-   - `%USERPROFILE%\iCloudDrive\Shortcuts\LTFI\reminders.json` (or `.jsonl`)
+   - `%USERPROFILE%\iCloudDrive\LTFI\reminders.jsonl.json` (or `.jsonl`)
    - `%USERPROFILE%\iCloud Drive\Shortcuts\LTFI\reminders.json` (or `.jsonl`)
 
    If yours is somewhere else, set it in `%AppData%\LTFI\settings.json`, which LTFI creates on first run:
