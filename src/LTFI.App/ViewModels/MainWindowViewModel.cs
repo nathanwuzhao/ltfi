@@ -15,13 +15,14 @@ namespace LTFI.ViewModels;
 /// <summary>
 /// The app shell: owns the navigation rail, the live top-bar status readout (clock, points,
 /// streak, active-project meter), and the currently displayed page. Modelled on the
-/// "LTFI Command Center" design — a top status bar over a 46px icon rail and a content region.
+/// "LTFI Command Center" design â€” a top status bar over a 46px icon rail and a content region.
 /// </summary>
 public partial class MainWindowViewModel : ViewModelBase
 {
     private readonly IInsightsService _insights;
     private readonly IProjectService _projectService;
     private readonly IReflectionService _reflections;
+    private readonly RemindersPanelViewModel _reminders;
     private readonly DispatcherTimer _clock;
     private int _tick;
 
@@ -48,8 +49,8 @@ public partial class MainWindowViewModel : ViewModelBase
     private int activeLimit = ProjectPolicy.MaxActiveProjects;
 
     /// <summary>Green filled cells and faint empty cells of the top-bar active-project meter.</summary>
-    public string ActiveMeterFilled => new('▮', Math.Clamp(ActiveCount, 0, ActiveLimit));
-    public string ActiveMeterEmpty => new('▯', Math.Max(0, ActiveLimit - ActiveCount));
+    public string ActiveMeterFilled => new('â–®', Math.Clamp(ActiveCount, 0, ActiveLimit));
+    public string ActiveMeterEmpty => new('â–¯', Math.Max(0, ActiveLimit - ActiveCount));
     public string ActiveText => $"{ActiveCount}/{ActiveLimit}";
 
     /// <summary>True when the (unlisted, bottom-pinned) Settings page is showing.</summary>
@@ -80,11 +81,13 @@ public partial class MainWindowViewModel : ViewModelBase
         CheckInViewModel checkIn,
         IInsightsService insights,
         IProjectService projectService,
-        IReflectionService reflections)
+        IReflectionService reflections,
+        RemindersPanelViewModel reminders)
     {
         _insights = insights;
         _projectService = projectService;
         _reflections = reflections;
+        _reminders = reminders;
         _checkIn = checkIn;
         _checkInNav = new NavItem("CHK", "Check-In", checkIn);
         _focus_vm = focus;
@@ -121,6 +124,18 @@ public partial class MainWindowViewModel : ViewModelBase
             _ = RefreshHeaderAsync();
         };
 
+        // A reminders sync that changed data (new tasks, iPhone completions â†’ evidence/points)
+        // re-reads the header and the read-only overview pages. Tasks is left alone so an
+        // in-progress edit there isn't clobbered.
+        reminders.Synced += (_, _) =>
+        {
+            if (CurrentViewModel is (TodayViewModel or CommandCenterViewModel) and IRefreshable page)
+            {
+                _ = SafeRefreshAsync(page);
+            }
+            _ = RefreshHeaderAsync();
+        };
+
         UpdateClock();
         _clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _clock.Tick += (_, _) => OnClockTick();
@@ -129,6 +144,9 @@ public partial class MainWindowViewModel : ViewModelBase
         SelectedNav = NavItems[0];
         _ = RefreshHeaderAsync();
         _ = CheckGateAsync();
+
+        // Pull the latest iPhone reminders export on start-up (then on the 15s poll below).
+        _ = _reminders.SyncIfChangedAsync();
     }
 
     partial void OnSelectedNavChanged(NavItem? value)
@@ -158,6 +176,8 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             _ = RefreshHeaderAsync();
             _ = CheckGateAsync();
+            // Cheap when nothing changed: a stat of the export file, no read.
+            _ = _reminders.SyncIfChangedAsync();
         }
     }
 

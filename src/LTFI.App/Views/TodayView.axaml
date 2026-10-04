@@ -8,78 +8,165 @@
              x:DataType="vm:TodayViewModel"
              mc:Ignorable="d">
 
-    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*" Margin="28">
-        <TextBlock Classes="page-title" Text="{Binding Header}"/>
-        <TextBlock Grid.Row="1" Classes="muted" Margin="0,6,0,14" Text="{Binding SummaryText}"/>
+    <Grid ColumnDefinitions="3*,2*" Margin="28">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,*">
+            <TextBlock Classes="page-title" Text="{Binding Header}"/>
+            <TextBlock Grid.Row="1" Classes="muted" Margin="0,6,0,14" Text="{Binding SummaryText}"/>
 
-        <!-- Stat strip: quick-start + points + streak -->
-        <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto,*" Margin="0,0,0,12">
-            <Button Classes="primary" Content="Start focus"
-                    Command="{Binding StartFocusCommand}"
-                    ToolTip.Tip="Select a task below to start a focus session"/>
-            <Border Grid.Column="1" Classes="chip" Margin="10,0,0,0">
-                <StackPanel Orientation="Horizontal" Spacing="4">
-                    <TextBlock Text="Points today:"/>
-                    <TextBlock Text="{Binding PointsToday}"/>
+            <!-- Stat strip: quick-start + points + streak -->
+            <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto,*" Margin="0,0,0,12">
+                <Button Classes="primary" Content="Start focus"
+                        Command="{Binding StartFocusCommand}"
+                        ToolTip.Tip="Select a task below to start a focus session"/>
+                <Border Grid.Column="1" Classes="chip" Margin="10,0,0,0">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock Text="Points today:"/>
+                        <TextBlock Text="{Binding PointsToday}"/>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="2" Classes="chip" Margin="8,0,0,0">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock Text="Focus streak:"/>
+                        <TextBlock Text="{Binding FocusStreakDays}"/>
+                        <TextBlock Text="d"/>
+                    </StackPanel>
+                </Border>
+                <TextBlock Grid.Column="3"
+                           Margin="14,0,0,0"
+                           VerticalAlignment="Center"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource WarningBrush}"
+                           Text="{Binding FeedbackMessage}"/>
+            </Grid>
+
+            <!-- Active focus session banner -->
+            <Border Grid.Row="3" Classes="card" Margin="0,0,0,12"
+                    Padding="14,10"
+                    IsVisible="{Binding HasActiveSession}">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <TextBlock Classes="section-header" Text="IN FOCUS" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding ActiveSessionText}" VerticalAlignment="Center"/>
                 </StackPanel>
             </Border>
-            <Border Grid.Column="2" Classes="chip" Margin="8,0,0,0">
-                <StackPanel Orientation="Horizontal" Spacing="4">
-                    <TextBlock Text="Focus streak:"/>
-                    <TextBlock Text="{Binding FocusStreakDays}"/>
-                    <TextBlock Text="d"/>
-                </StackPanel>
+
+            <Border Grid.Row="4" Classes="card" Padding="8">
+                <Panel>
+                    <TextBlock Classes="muted"
+                               Margin="12"
+                               VerticalAlignment="Top"
+                               Text="Nothing due today. Plan work from the Tasks page."
+                               IsVisible="{Binding !HasTasks}"/>
+
+                    <ListBox ItemsSource="{Binding TodayTasks}"
+                             SelectedItem="{Binding SelectedTask, Mode=TwoWay}"
+                             Background="Transparent"
+                             IsVisible="{Binding HasTasks}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="domain:TaskItem">
+                                <Grid ColumnDefinitions="*,Auto,Auto" Margin="4">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold"/>
+                                        <TextBlock Classes="muted" FontSize="12"
+                                                   Text="{Binding Description, FallbackValue=''}"/>
+                                    </StackPanel>
+                                    <Border Grid.Column="1" Classes="chip" Margin="8,0">
+                                        <TextBlock Text="{Binding Priority}"/>
+                                    </Border>
+                                    <Button Grid.Column="2"
+                                            Content="Complete"
+                                            Command="{ReflectionBinding $parent[UserControl].DataContext.CompleteTaskCommand}"
+                                            CommandParameter="{Binding}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Panel>
             </Border>
-            <TextBlock Grid.Column="3"
-                       Margin="14,0,0,0"
-                       VerticalAlignment="Center"
-                       TextWrapping="Wrap"
-                       Foreground="{DynamicResource WarningBrush}"
-                       Text="{Binding FeedbackMessage}"/>
         </Grid>
 
-        <!-- Active focus session banner -->
-        <Border Grid.Row="3" Classes="card" Margin="0,0,0,12"
-                Padding="14,10"
-                IsVisible="{Binding HasActiveSession}">
-            <StackPanel Orientation="Horizontal" Spacing="10">
-                <TextBlock Classes="section-header" Text="IN FOCUS" VerticalAlignment="Center"/>
-                <TextBlock Text="{Binding ActiveSessionText}" VerticalAlignment="Center"/>
-            </StackPanel>
-        </Border>
+        <!-- REMINDERS: the iCloud Reminders mirror (iPhone Shortcut → iCloud Drive → this PC). -->
+        <Border Grid.Column="1" Classes="panel" Margin="14,0,0,0"
+                DataContext="{ReflectionBinding Reminders}" x:DataType="vm:RemindersPanelViewModel">
+            <Grid RowDefinitions="Auto,Auto,*">
+                <Border Classes="panel-hd">
+                    <Grid ColumnDefinitions="*,Auto,Auto">
+                        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                            <TextBlock Classes="micro" Text="REMINDERS"/>
+                            <TextBlock Classes="micro-dim" Text="{Binding CountText}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" Classes="micro-dim" Margin="0,0,8,0" VerticalAlignment="Center"
+                                   Text="SYNCING…" IsVisible="{Binding IsSyncing}"/>
+                        <Button Grid.Column="2" Classes="ghost" Padding="10,3" Content="SYNC"
+                                Command="{Binding SyncCommand}"
+                                ToolTip.Tip="Re-read the iPhone export now"/>
+                    </Grid>
+                </Border>
 
-        <Border Grid.Row="4" Classes="card" Padding="8">
-            <Panel>
-                <TextBlock Classes="muted"
-                           Margin="12"
-                           VerticalAlignment="Top"
-                           Text="Nothing due today. Plan work from the Tasks page."
-                           IsVisible="{Binding !HasTasks}"/>
+                <!-- Status strip: last sync / stale / error -->
+                <StackPanel Grid.Row="1" Margin="10,8,10,4" Spacing="3">
+                    <TextBlock Classes="micro-dim" TextWrapping="Wrap" Text="{Binding StatusText}"
+                               IsVisible="{Binding IsConfigured}"/>
+                    <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource WarningBrush}"
+                               Text="Last iPhone export is over 24h old — check the LTFI Export automation."
+                               IsVisible="{Binding IsStale}"/>
+                    <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource WarningBrush}"
+                               Text="{Binding ErrorText}"
+                               IsVisible="{Binding ErrorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                </StackPanel>
 
-                <ListBox ItemsSource="{Binding TodayTasks}"
-                         SelectedItem="{Binding SelectedTask, Mode=TwoWay}"
-                         Background="Transparent"
-                         IsVisible="{Binding HasTasks}">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate x:DataType="domain:TaskItem">
-                            <Grid ColumnDefinitions="*,Auto,Auto" Margin="4">
-                                <StackPanel Spacing="4">
-                                    <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold"/>
-                                    <TextBlock Classes="muted" FontSize="12"
-                                               Text="{Binding Description, FallbackValue=''}"/>
-                                </StackPanel>
-                                <Border Grid.Column="1" Classes="chip" Margin="8,0">
-                                    <TextBlock Text="{Binding Priority}"/>
-                                </Border>
-                                <Button Grid.Column="2"
-                                        Content="Complete"
-                                        Command="{ReflectionBinding $parent[UserControl].DataContext.CompleteTaskCommand}"
-                                        CommandParameter="{Binding}"/>
-                            </Grid>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-            </Panel>
+                <!-- Not configured: tell the user where the export should land. -->
+                <StackPanel Grid.Row="2" Margin="10,4,10,12" Spacing="8" IsVisible="{Binding !IsConfigured}">
+                    <TextBlock Classes="bright" FontWeight="SemiBold" Text="Not connected yet"/>
+                    <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap"
+                               Text="LTFI mirrors iCloud Reminders from a JSON file your iPhone's 'LTFI Export' Shortcut saves to iCloud Drive. Install iCloud for Windows, build the Shortcut (docs/reminders-sync-setup.md), and the file should appear at:"/>
+                    <Border Classes="chip" HorizontalAlignment="Stretch">
+                        <SelectableTextBlock FontSize="10" TextWrapping="Wrap" Text="{Binding Location}"/>
+                    </Border>
+                    <TextBlock Classes="faint" FontSize="10" TextWrapping="Wrap"
+                               Text="Or set reminders.snapshotPath in %AppData%\LTFI\settings.json. LTFI checks every 15s."/>
+                </StackPanel>
+
+                <!-- Open reminders grouped by list -->
+                <Panel Grid.Row="2" IsVisible="{Binding IsConfigured}">
+                    <TextBlock Classes="muted" Margin="10,6" FontSize="11"
+                               Text="No open reminders." IsVisible="{Binding !HasReminders}"/>
+                    <ScrollViewer IsVisible="{Binding HasReminders}">
+                        <ItemsControl ItemsSource="{Binding Groups}" Margin="0,0,0,8">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ReminderGroup">
+                                    <StackPanel Margin="0,6,0,0">
+                                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="10,4">
+                                            <TextBlock Classes="micro" Text="{Binding ListName}"/>
+                                            <TextBlock Classes="micro-dim" Text="{Binding Count}" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                        <ItemsControl ItemsSource="{Binding Items}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:ReminderRow">
+                                                    <Border BorderBrush="{DynamicResource BorderRowBrush}"
+                                                            BorderThickness="0,0,0,1" Padding="10,5">
+                                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                                            <TextBlock Width="22" FontSize="11"
+                                                                       Foreground="{DynamicResource WarningBrush}"
+                                                                       Text="{Binding PriorityText}"/>
+                                                            <TextBlock Grid.Column="1" FontSize="12"
+                                                                       TextTrimming="CharacterEllipsis"
+                                                                       Text="{Binding Title}"
+                                                                       ToolTip.Tip="{Binding Title}"/>
+                                                            <TextBlock Grid.Column="2" FontSize="11" Margin="10,0,0,0"
+                                                                       Foreground="{Binding DueBrush}"
+                                                                       Text="{Binding DueText}"/>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Panel>
+            </Grid>
         </Border>
     </Grid>
 </UserControl>

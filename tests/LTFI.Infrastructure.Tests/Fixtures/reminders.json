@@ -1,0 +1,40 @@
+{
+  "schema": "ltfi.reminders/v1",
+  "source": "shortcuts",
+  "exportedAt": "2026-10-03T12:00:00-04:00",
+  "reminders": [
+    {
+      "title": "Renew passport",
+      "notes": "Photos first",
+      "list": "Personal",
+      "dueDate": "2026-10-10T17:00:00-04:00",
+      "priority": "High",
+      "isFlagged": true,
+      "isCompleted": false,
+      "completionDate": "",
+      "creationDate": "2026-09-01T08:30:00-04:00"
+    },
+    {
+      "Title": "Write LTFI importer",
+      "List": { "name": "LTFI" },
+      "DueDate": "2026-10-04",
+      "Priority": 9,
+      "IsCompleted": "No",
+      "CreationDate": "2026-09-20T10:00:00-04:00"
+    },
+    {
+      "id": "x-apple-reminder://ABC-123",
+      "title": "Buy groceries",
+      "list": "Personal",
+      "dueDate": "",
+      "priority": 0,
+      "isCompleted": true,
+      "completionDate": "2026-10-02T18:45:00-04:00",
+      "creationDate": "2026-10-01T09:00:00-04:00"
+    },
+    {
+      "title": "   ",
+      "list": "Personal"
+    }
+  ]
+}

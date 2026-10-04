@@ -40,6 +40,9 @@
                                         <TextBlock Classes="muted" FontSize="12" Text="·"/>
                                         <TextBlock Classes="muted" FontSize="12"
                                                    Text="{Binding TimeSpent, Converter={StaticResource DurationToClock}}"/>
+                                        <!-- Mirrored from iCloud Reminders -->
+                                        <TextBlock Classes="faint" FontSize="11" IsVisible="{Binding IsExternal}"
+                                                   Text="{Binding ExternalList, StringFormat='· iCLOUD {0}'}"/>
                                     </StackPanel>
                                 </StackPanel>
                                 <Border Grid.Column="1" Classes="chip">
@@ -57,6 +60,10 @@
             <ScrollViewer>
                 <StackPanel Spacing="14">
                     <TextBlock Classes="page-title" FontSize="20" Text="{Binding EditorTitle}"/>
+
+                    <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap"
+                               IsVisible="{Binding SelectedTask.IsExternal, FallbackValue=False}"
+                               Text="Mirrored from iCloud Reminders. Title, description, due date and priority are overwritten on the next sync — edit those on your iPhone. Project, status and focus time are LTFI's own."/>
 
                     <StackPanel Spacing="6">
                         <TextBlock Classes="section-header" Text="TITLE"/>
