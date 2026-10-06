@@ -26,6 +26,19 @@ public interface ITaskService
 
     Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Sets a task's due date. For a reminder-backed task this is pushed to the iPhone through the
+    /// outbox (an <c>update</c> command, or the pending <c>create</c>'s payload); the sync keeps the
+    /// pushed date until an export confirms it. Throws for a reminder with no <c>ltfi://</c> url.
+    /// </summary>
+    Task SetDueDateAsync(Guid id, DateTimeOffset due, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Moves the due date by <paramref name="days"/> keeping its time of day (local midnight stays
+    /// midnight); with no due date, counts from today's local midnight. Returns the new due date.
+    /// </summary>
+    Task<DateTimeOffset> PushDueByDaysAsync(Guid id, int days, CancellationToken cancellationToken = default);
+
     // --- Subtasks ---
 
     Task<SubtaskItem> AddSubtaskAsync(Guid taskId, string title, CancellationToken cancellationToken = default);

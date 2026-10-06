@@ -30,6 +30,7 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
     private readonly IProjectService _projectService;
     private readonly IAreaService _areaService;
     private readonly RemindersSettings _remindersSettings;
+    private readonly ShellSignals _signals;
     private readonly List<TaskItem> _allTasks = [];
     private bool _suppressSelectionLoad;
     private bool _suppressProjectChange;
@@ -104,12 +105,14 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
         ITaskService taskService,
         IProjectService projectService,
         IAreaService areaService,
-        RemindersSettings remindersSettings)
+        RemindersSettings remindersSettings,
+        ShellSignals signals)
     {
         _taskService = taskService;
         _projectService = projectService;
         _areaService = areaService;
         _remindersSettings = remindersSettings;
+        _signals = signals;
         BeginNewTask();
     }
 
@@ -211,11 +214,17 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
             else if (SelectedTask is not null)
             {
                 var id = SelectedTask.Id;
+                var dueChanged = SelectedTask.DueAt != draft.DueAt;
+                var pushesDue = dueChanged && SelectedTask.IsExternal;
                 await _taskService.UpdateAsync(id, draft);
                 await RefreshAsync();
                 SelectById(id);
-                FeedbackMessage = "Changes saved.";
+                FeedbackMessage = pushesDue
+                    ? $"Changes saved. New due date {draft.DueAt:yyyy-MM-dd} queued for your iPhone (LTFI Apply)."
+                    : "Changes saved.";
             }
+
+            _signals.NotifyStatsChanged();
         }
         catch (Exception ex)
         {
@@ -289,6 +298,36 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
         }
 
         // Always reload: on failure this also resets the checkbox the click already toggled.
+        await RefreshAsync();
+        FeedbackMessage = message;
+        _signals.NotifyStatsChanged();
+    }
+
+    /// <summary>
+    /// The row's "+1D" button: moves the due date a day later (same time of day; no due date →
+    /// tomorrow) and, for a reminder, queues it for the iPhone via the outbox.
+    /// </summary>
+    [RelayCommand]
+    private async Task PushDueAsync(TaskItem? task)
+    {
+        if (task is null)
+        {
+            return;
+        }
+
+        string message;
+        try
+        {
+            var due = await _taskService.PushDueByDaysAsync(task.Id, 1);
+            message = task.IsExternal
+                ? $"\"{task.Title}\" now due {due:ddd yyyy-MM-dd} — goes to your iPhone when the LTFI Apply Shortcut runs."
+                : $"\"{task.Title}\" now due {due:ddd yyyy-MM-dd}.";
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+        }
+
         await RefreshAsync();
         FeedbackMessage = message;
     }

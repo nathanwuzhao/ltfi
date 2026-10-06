@@ -64,7 +64,7 @@ public class TaskItem
     public DateTimeOffset? ExternalRemovedAt { get; set; }
 
     /// <summary>
-    /// Set while LTFI has write-back commands for this task (create/complete) that the iPhone
+    /// Set while LTFI has write-back commands for this task (create/complete/update) that the iPhone
     /// hasn't confirmed in an export yet; cleared by the sync once they all show up.
     /// </summary>
     public DateTimeOffset? ExternalPendingSince { get; set; }
@@ -74,6 +74,9 @@ public class TaskItem
 
     /// <summary>True while a change made in LTFI is waiting for the iPhone (derived, not stored).</summary>
     public bool IsPendingOnPhone => ExternalPendingSince is not null;
+
+    /// <summary>Not Completed or Canceled (derived, not stored).</summary>
+    public bool IsOpen => Status is not (TaskStatus.Completed or TaskStatus.Canceled);
 
     public ICollection<SubtaskItem> Subtasks { get; set; } = new List<SubtaskItem>();
 

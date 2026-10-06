@@ -20,6 +20,7 @@ public partial class TodayViewModel : ViewModelBase, IRefreshable
     private readonly IProjectService _projectService;
     private readonly IFocusSessionService _focus;
     private readonly IInsightsService _insights;
+    private readonly ShellSignals _signals;
 
     /// <summary>The iCloud Reminders mirror panel shown beside today's tasks.</summary>
     public RemindersPanelViewModel Reminders { get; }
@@ -49,12 +50,14 @@ public partial class TodayViewModel : ViewModelBase, IRefreshable
         IProjectService projectService,
         IFocusSessionService focus,
         IInsightsService insights,
-        RemindersPanelViewModel reminders)
+        RemindersPanelViewModel reminders,
+        ShellSignals signals)
     {
         _taskService = taskService;
         _projectService = projectService;
         _focus = focus;
         _insights = insights;
+        _signals = signals;
         Reminders = reminders;
     }
 
@@ -125,11 +128,37 @@ public partial class TodayViewModel : ViewModelBase, IRefreshable
             await _taskService.SetStatusAsync(task.Id, TaskStatus.Completed);
             FeedbackMessage = string.Empty;
             await RefreshAsync();
+            _signals.NotifyStatsChanged();
         }
         catch (Exception ex)
         {
             // e.g. a required-focus-time gate not yet met.
             FeedbackMessage = ex.Message;
         }
+    }
+
+    /// <summary>"+1D": due date one day later (same time of day), pushed to the iPhone via the outbox.</summary>
+    [RelayCommand]
+    private async Task PushDueAsync(TaskItem? task)
+    {
+        if (task is null)
+        {
+            return;
+        }
+
+        string message;
+        try
+        {
+            var due = await _taskService.PushDueByDaysAsync(task.Id, 1);
+            message = $"\"{task.Title}\" now due {due:ddd yyyy-MM-dd}" +
+                      (task.IsExternal ? " — goes to your iPhone when LTFI Apply runs." : ".");
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+        }
+
+        await RefreshAsync();
+        FeedbackMessage = message;
     }
 }

@@ -92,6 +92,28 @@ public static class ReminderRules
     }
 
     /// <summary>
+    /// Whether an exported due date shows a due date LTFI pushed (an outbox <c>update</c>/<c>create</c>).
+    /// Same instant within a minute (the phone may drop seconds or write another offset), or — when
+    /// either side is local midnight, i.e. an all-day / date-only reminder — the same local calendar day.
+    /// </summary>
+    public static bool DueMatches(DateTimeOffset pushed, DateTimeOffset? actual)
+    {
+        if (actual is not { } a)
+        {
+            return false;
+        }
+
+        if ((pushed - a).Duration() < TimeSpan.FromMinutes(1))
+        {
+            return true;
+        }
+
+        var p = pushed.LocalDateTime;
+        var l = a.LocalDateTime;
+        return (p.TimeOfDay == TimeSpan.Zero || l.TimeOfDay == TimeSpan.Zero) && p.Date == l.Date;
+    }
+
+    /// <summary>
     /// LTFI priority → the text the iPhone's Add New Reminder takes. Medium is LTFI's "no priority"
     /// (None imports as Medium), so it goes out as None rather than putting "!!" on every reminder.
     /// </summary>

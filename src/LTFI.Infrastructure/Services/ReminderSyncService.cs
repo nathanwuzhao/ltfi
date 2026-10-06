@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using LTFI.Core.Abstractions;
 using LTFI.Core.Domain;
 using LTFI.Infrastructure.Persistence;
+using LTFI.Infrastructure.Reminders;
 using LTFI.Infrastructure.Settings;
 using TaskStatus = LTFI.Core.Domain.TaskStatus;
 
@@ -14,7 +15,8 @@ namespace LTFI.Infrastructure.Services;
 /// project/area (list → <see cref="RemindersSettings.ListMap"/>, else standing project + area named
 /// after the list). Reminders LTFI created itself keep the project/area LTFI recorded.
 /// InProgress/Deferred and focus sessions are preserved. Each pass also confirms outbox commands the
-/// export shows as done. Each pass is a single SaveChanges (one transaction), so a bad snapshot never
+/// export shows as done; while an LTFI-pushed due date (outbox "update") is unconfirmed, the task's
+/// DueAt is LTFI's, not the export's. Each pass is a single SaveChanges (one transaction), so a bad snapshot never
 /// half-applies.
 /// </summary>
 public sealed class ReminderSyncService(
@@ -161,6 +163,12 @@ public sealed class ReminderSyncService(
             .Select(c => c.ExternalUrl)
             .ToHashSet(StringComparer.Ordinal);
 
+        // Due dates LTFI pushed that the iPhone hasn't shown yet: LTFI's date stands until then.
+        var pendingUpdates = unconfirmed
+            .Where(c => c.Op == OutboxCommand.UpdateOp)
+            .GroupBy(c => c.ExternalUrl, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.OrderBy(c => c.CreatedAt).ToList(), StringComparer.Ordinal);
+
         // Tasks that already earned their reminder completion evidence (dedupe across re-syncs).
         var evidenced = (await db.Evidence.AsNoTracking()
                 .Where(e => e.Source == Key && e.TaskId != null)
@@ -208,7 +216,28 @@ public sealed class ReminderSyncService(
                 added++;
             }
 
-            changed |= ApplyFields(task, reminder);
+            // A pushed due date: confirmed once the export shows it (then the phone owns DueAt
+            // again); until then the sync leaves LTFI's date alone.
+            var keepDue = false;
+            if (pendingUpdates.TryGetValue(reminder.ExternalId, out var updates))
+            {
+                var pushed = ReminderOutbox.ReadDue(updates[^1].PayloadJson);
+                // (A reminder completed on the phone no longer needs the new date.)
+                if (pushed is null || reminder.IsCompleted || ReminderRules.DueMatches(pushed.Value, reminder.DueAt))
+                {
+                    foreach (var update in updates)
+                    {
+                        update.ConfirmedAt = now;
+                        confirmed++;
+                    }
+                }
+                else
+                {
+                    keepDue = true;
+                }
+            }
+
+            changed |= ApplyFields(task, reminder, keepDue);
 
             // Project/area follow the list — except for a reminder LTFI created, which keeps the
             // project/area LTFI recorded for it (when it has a row to remember them by).
@@ -294,10 +323,17 @@ public sealed class ReminderSyncService(
         }
 
         // Confirm write-back commands the export shows as done: create → a reminder with that url
-        // exists; complete → that url is completed. Confirmed commands leave outbox.json.
+        // exists; complete → that url is completed (updates were settled in the loop above).
+        // Confirmed commands leave outbox.json.
         var byId = incoming.ToDictionary(r => r.ExternalId, StringComparer.Ordinal);
+        var followUps = new List<OutboxCommand>();
         foreach (var command in unconfirmed)
         {
+            if (command.ConfirmedAt is not null)
+            {
+                continue;
+            }
+
             var done = byId.TryGetValue(command.ExternalUrl, out var reminder) && command.Op switch
             {
                 OutboxCommand.CreateOp => true,
@@ -305,15 +341,31 @@ public sealed class ReminderSyncService(
                 _ => false
             };
 
-            if (done)
+            if (!done)
             {
-                command.ConfirmedAt = now;
-                confirmed++;
+                continue;
+            }
+
+            command.ConfirmedAt = now;
+            confirmed++;
+
+            // The iPhone made the reminder from an older outbox.json than the latest one (iCloud
+            // lag), so it lacks a due date LTFI set meanwhile: send that date as an update, and keep
+            // it locally until confirmed, rather than letting the stale date win.
+            if (command.Op == OutboxCommand.CreateOp && !reminder!.IsCompleted
+                && ReminderOutbox.ReadDue(command.PayloadJson) is { } wanted
+                && !ReminderRules.DueMatches(wanted, reminder.DueAt)
+                && existing.TryGetValue(command.ExternalUrl, out var created))
+            {
+                created.DueAt = wanted;
+                created.UpdatedAt = now;
+                followUps.Add(ReminderOutbox.EnqueueUpdate(db, created, null, now));
             }
         }
 
         // Tasks whose commands are all confirmed are no longer pending on the iPhone.
         var stillPending = unconfirmed
+            .Concat(followUps)
             .Where(c => c.ConfirmedAt is null)
             .Select(c => c.ExternalUrl)
             .ToHashSet(StringComparer.Ordinal);
@@ -444,20 +496,22 @@ public sealed class ReminderSyncService(
     }
 
     /// <summary>Copies the source-owned fields; returns true if anything differed.</summary>
-    private static bool ApplyFields(TaskItem task, ExternalReminder reminder)
+    /// <remarks>With <paramref name="keepDue"/> (an LTFI-pushed due date is still pending) DueAt is left alone.</remarks>
+    private static bool ApplyFields(TaskItem task, ExternalReminder reminder, bool keepDue = false)
     {
         var notes = string.IsNullOrWhiteSpace(reminder.Notes) ? null : reminder.Notes.Trim();
         var list = string.IsNullOrWhiteSpace(reminder.ListName) ? null : reminder.ListName.Trim();
+        var due = keepDue ? task.DueAt : reminder.DueAt;
 
         var changed = task.Title != reminder.Title
                       || task.Description != notes
-                      || task.DueAt != reminder.DueAt
+                      || task.DueAt != due
                       || task.Priority != reminder.Priority
                       || task.ExternalList != list;
 
         task.Title = reminder.Title;
         task.Description = notes;
-        task.DueAt = reminder.DueAt;
+        task.DueAt = due;
         task.Priority = reminder.Priority;
         task.ExternalList = list;
         return changed;

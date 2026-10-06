@@ -82,7 +82,7 @@ public sealed class ReminderOutbox(IDbContextFactory<LtfiDbContext> contextFacto
 
     /// <summary>
     /// The file contents: <c>{"schema","writtenAt","commands":[{"op","url",…flat string fields}]}</c>,
-    /// commands in the order they were enqueued (a create always precedes its complete).
+    /// commands in the order they were enqueued (a create always precedes its complete/update).
     /// </summary>
     public static string BuildFileJson(IEnumerable<OutboxCommand> commands, DateTimeOffset writtenAt)
     {
@@ -148,6 +148,57 @@ public sealed class ReminderOutbox(IDbContextFactory<LtfiDbContext> contextFacto
         db.Outbox.Add(command);
         task.ExternalPendingSince ??= now;
         return command;
+    }
+
+    /// <summary>
+    /// Queues "set this reminder's due date on the iPhone" with the task's current
+    /// <see cref="TaskItem.DueAt"/> (which must be set). Coalesces: an unconfirmed update for the same
+    /// url (<paramref name="pendingUpdate"/>) gets the new date instead of a second command.
+    /// </summary>
+    public static OutboxCommand EnqueueUpdate(LtfiDbContext db, TaskItem task, OutboxCommand? pendingUpdate, DateTimeOffset now)
+    {
+        if (task.DueAt is null)
+        {
+            throw new InvalidOperationException("An update command needs a due date.");
+        }
+
+        var payload = UpdatePayload(task.DueAt.Value);
+        task.ExternalPendingSince ??= now;
+        if (pendingUpdate is not null)
+        {
+            pendingUpdate.PayloadJson = payload;
+            return pendingUpdate;
+        }
+
+        var command = new OutboxCommand
+        {
+            Op = OutboxCommand.UpdateOp,
+            ExternalUrl = task.ExternalId!,
+            PayloadJson = payload,
+            // After any create/complete queued in the same unit of work.
+            CreatedAt = now.AddTicks(2)
+        };
+        db.Outbox.Add(command);
+        return command;
+    }
+
+    /// <summary>The update command's fields: just <c>dueDate</c> (full ISO 8601 with offset).</summary>
+    public static string UpdatePayload(DateTimeOffset due) =>
+        JsonSerializer.Serialize(new Dictionary<string, string> { ["dueDate"] = FormatDue(due) });
+
+    /// <summary>The <c>dueDate</c> a create/update payload carries; null when empty or unreadable.</summary>
+    public static DateTimeOffset? ReadDue(string payloadJson)
+    {
+        foreach (var (key, value) in ReadPayload(payloadJson))
+        {
+            if (key == "dueDate" && !string.IsNullOrWhiteSpace(value)
+                && DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var due))
+            {
+                return due;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>The create command's fields, all flat strings (Shortcuts-friendly).</summary>

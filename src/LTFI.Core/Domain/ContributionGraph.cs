@@ -106,6 +106,43 @@ public sealed record ContributionGraph(
     }
 
     /// <summary>
+    /// Per-day contribution scores (<see cref="EvidencePoints.ForContribution"/>; zero-weight evidence
+    /// is not an event) for the trailing <paramref name="days"/> local days ending
+    /// <paramref name="today"/>, oldest first, one entry per day including zeros.
+    /// </summary>
+    public static IReadOnlyList<DayScore> ScoreDays(
+        IEnumerable<(EvidenceType Type, DateTimeOffset OccurredAt)> evidence, DateOnly today, int days = DefaultDays)
+    {
+        days = Math.Max(1, days);
+        var start = today.AddDays(-(days - 1));
+
+        var byDay = evidence
+            .Select(r => (Day: DateOnly.FromDateTime(r.OccurredAt.LocalDateTime), Weight: EvidencePoints.ForContribution(r.Type)))
+            .Where(r => r.Weight > 0 && r.Day >= start && r.Day <= today)
+            .GroupBy(r => r.Day)
+            .ToDictionary(g => g.Key, g => (Points: g.Sum(r => r.Weight), Events: g.Count()));
+
+        var result = new List<DayScore>(days);
+        for (var i = 0; i < days; i++)
+        {
+            var day = start.AddDays(i);
+            result.Add(byDay.TryGetValue(day, out var s)
+                ? new DayScore(day, s.Points, s.Events)
+                : new DayScore(day, 0, 0));
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// The graph's "current streak": consecutive days with contribution points, counting back from
+    /// today (or yesterday, if today has nothing yet). The single rule behind the graph's stat and
+    /// the shell header's STREAK.
+    /// </summary>
+    public static int CurrentStreak(IEnumerable<DayScore> scores, DateOnly today) =>
+        Streaks.ConsecutiveDays(scores.Where(s => s.Points > 0).Select(s => s.Day), today);
+
+    /// <summary>
     /// Quartile cut points (nearest-rank 25th/50th/75th percentile) plus the max of the
     /// non-zero values. Empty when there is no activity.
     /// </summary>
@@ -160,7 +197,7 @@ public sealed record ContributionGraph(
             TotalPoints: active.Sum(s => s.Points),
             TotalEvents: active.Sum(s => s.Events),
             ActiveDays: activeDays.Count,
-            CurrentStreak: Streaks.ConsecutiveDays(activeDays, today),
+            CurrentStreak: CurrentStreak(active, today),
             LongestStreak: longest,
             BestDay: best);
     }

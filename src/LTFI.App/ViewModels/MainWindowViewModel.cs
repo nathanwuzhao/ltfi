@@ -13,8 +13,8 @@ using Serilog;
 namespace LTFI.ViewModels;
 
 /// <summary>
-/// The app shell: owns the navigation rail, the live top-bar status readout (clock, points,
-/// streak, active-project meter), and the currently displayed page. Modelled on the
+/// The app shell: owns the navigation rail, the live top-bar status readout (clock, points today,
+/// activity streak, active-project meter), and the currently displayed page. Modelled on the
 /// "LTFI Command Center" design — a top status bar over a 46px icon rail and a content region.
 /// </summary>
 public partial class MainWindowViewModel : ViewModelBase
@@ -82,7 +82,8 @@ public partial class MainWindowViewModel : ViewModelBase
         IInsightsService insights,
         IProjectService projectService,
         IReflectionService reflections,
-        RemindersPanelViewModel reminders)
+        RemindersPanelViewModel reminders,
+        ShellSignals signals)
     {
         _insights = insights;
         _projectService = projectService;
@@ -136,6 +137,10 @@ public partial class MainWindowViewModel : ViewModelBase
             }
             _ = RefreshHeaderAsync();
         };
+
+        // Pages announce things that move the header numbers (task completion, commitment kept,
+        // focus/NSDR done, due date pushed); re-read it now rather than on the next 15s tick.
+        signals.StatsChanged += (_, _) => _ = RefreshHeaderAsync();
 
         UpdateClock();
         _clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -195,7 +200,9 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             var snapshot = await _insights.GetTodaySnapshotAsync();
             PointsToday = snapshot.PointsToday;
-            StreakDays = snapshot.FocusStreakDays;
+            // The activity streak — the same number as the contribution graph's "current streak"
+            // (the focus-only streak lives in the Focus Debt panel).
+            StreakDays = snapshot.ActivityStreakDays;
 
             ActiveCount = await _projectService.CountActiveAsync();
         }

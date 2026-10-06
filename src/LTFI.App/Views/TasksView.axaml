@@ -68,6 +68,11 @@
                                     </WrapPanel>
                                 </StackPanel>
                                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                    <Button Classes="ghost" Padding="6,1" FontSize="10" Content="+1D"
+                                            IsVisible="{Binding IsOpen}"
+                                            Command="{ReflectionBinding $parent[UserControl].DataContext.PushDueCommand}"
+                                            CommandParameter="{Binding}"
+                                            ToolTip.Tip="Push due date 1 day — syncs to iPhone"/>
                                     <Border Classes="chip" IsVisible="{Binding IsPendingOnPhone}"
                                             ToolTip.Tip="Pending on iPhone: the LTFI Apply Shortcut hasn't run, or the next export hasn't arrived yet">
                                         <TextBlock Foreground="{DynamicResource WarningBrush}" Text="PENDING"/>
@@ -95,7 +100,7 @@
 
                     <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap"
                                IsVisible="{Binding SelectedTask.IsExternal, FallbackValue=False}"
-                               Text="An iCloud reminder. Title, description, due date and priority come from your iPhone on every sync — edit those there (until the iPhone has created it, edits here update the pending reminder). Completing it here ticks it off on the iPhone via the outbox. Status and focus time are LTFI's own."/>
+                               Text="An iCloud reminder. Title, description and priority come from your iPhone on every sync — edit those there (until the iPhone has created it, edits here update the pending reminder). A new DUE DATE here is sent to the iPhone via the outbox (it shows PENDING until an export confirms it; clearing a due date must be done on the phone). Completing it here ticks it off on the iPhone. Status and focus time are LTFI's own."/>
 
                     <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap"
                                IsVisible="{Binding IsPlacementLocked}"

@@ -64,7 +64,7 @@
                              IsVisible="{Binding HasTasks}">
                         <ListBox.ItemTemplate>
                             <DataTemplate x:DataType="domain:TaskItem">
-                                <Grid ColumnDefinitions="*,Auto,Auto" Margin="4">
+                                <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="4">
                                     <StackPanel Spacing="4">
                                         <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold"/>
                                         <TextBlock Classes="muted" FontSize="12"
@@ -79,7 +79,13 @@
                                             <TextBlock Text="{Binding Priority}"/>
                                         </Border>
                                     </StackPanel>
-                                    <Button Grid.Column="2"
+                                    <Button Grid.Column="2" Classes="ghost" Padding="6,1" FontSize="10"
+                                            Margin="0,0,6,0" VerticalAlignment="Center"
+                                            Content="+1D"
+                                            Command="{ReflectionBinding $parent[UserControl].DataContext.PushDueCommand}"
+                                            CommandParameter="{Binding}"
+                                            ToolTip.Tip="Push due date 1 day — syncs to iPhone"/>
+                                    <Button Grid.Column="3"
                                             Content="Complete"
                                             Command="{ReflectionBinding $parent[UserControl].DataContext.CompleteTaskCommand}"
                                             CommandParameter="{Binding}"/>
@@ -121,7 +127,7 @@
                                IsVisible="{Binding ErrorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
                     <!-- Write-back: LTFI → outbox.json → "LTFI Apply" Shortcut on the iPhone -->
                     <TextBlock Classes="micro-dim" TextWrapping="Wrap" Text="{Binding OutboxText}"
-                               ToolTip.Tip="Reminders created or completed in LTFI that the iPhone hasn't confirmed yet"/>
+                               ToolTip.Tip="Reminders created, completed or re-dated in LTFI that the iPhone hasn't confirmed yet"/>
                     <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource WarningBrush}"
                                Text="{Binding OutboxError}"
                                IsVisible="{Binding OutboxError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>

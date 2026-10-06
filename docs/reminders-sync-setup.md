@@ -11,6 +11,7 @@ phone → LTFI:  Shortcut "LTFI Export"  →  iCloud Drive/LTFI/reminders.jsonl.
 LTFI → phone:  LTFI writes %USERPROFILE%\iCloudDrive\LTFI\outbox.json
                  →  iCloud for Windows  →  iCloud Drive/LTFI/outbox.json
                  →  Shortcut "LTFI Apply" (runs at the start of every export) creates / completes reminders
+                    and sets due dates
 ```
 
 Only Apple-supported parts are used. No Apple ID password or 2FA session is stored on the PC, and
@@ -24,8 +25,10 @@ What flows where:
   counts as `TaskCompleted` evidence (points and the activity graph), dated when you completed it.
   The RequiredTime focus gate does not apply to phone completions.
 - **LTFI → phone:** **New Task** in LTFI creates a reminder (it shows **PENDING ON iPHONE** until it
-  comes back in an export), and **completing** a task in LTFI ticks the reminder off. That's all the
-  write-back does. Edit titles, dates, lists etc. on the phone.
+  comes back in an export), **completing** a task in LTFI ticks the reminder off, and a **new due
+  date** set in LTFI (the **+1D** button on Tasks/Today, or DUE DATE in the task editor) is set on the
+  reminder. That's all the write-back does. Edit titles, notes, lists, priority — and *remove* due
+  dates — on the phone.
 
 ---
 
@@ -124,8 +127,8 @@ Run it once by hand, then check that `reminders.jsonl.json` appears on the PC.
 
 ## 3. iPhone: build the "LTFI Apply" Shortcut (one-time, ~20–30 min)
 
-This applies `outbox.json`. It only ever **adds** reminders and **ticks them off**; it never deletes
-or edits anything else. Every step is safe to repeat: LTFI keeps listing a command until an export
+This applies `outbox.json`. It only ever **adds** reminders, **ticks them off** and **sets their due
+date**; it never deletes or edits anything else. Every step is safe to repeat: LTFI keeps listing a command until an export
 shows it done, so the Shortcut may see the same command several times.
 
 Shortcuts app → **+** → name it **LTFI Apply**.
@@ -140,7 +143,7 @@ Shortcuts app → **+** → name it **LTFI Apply**.
    1. **Get Dictionary Value** `op` from *Repeat Item* → Set Variable `Op`;
       **Get Dictionary Value** `url` → Set Variable `CmdURL`.
       ⚠️ Tap the `Op` variable and set its type to **Rich Text**. Otherwise the **If** action
-      won't offer *is* `create` / `complete` (Dictionary values come through untyped).
+      won't offer *is* `create` / `complete` / `update` (Dictionary values come through untyped).
    2. **Find the reminder by URL:** **Find Reminders** where **URL** *is* `CmdURL` (limit 1) →
       Set Variable `Match`.
       - If *Find Reminders* can't filter by URL on your iOS: **Find Reminders** (all, including
@@ -160,7 +163,15 @@ Shortcuts app → **+** → name it **LTFI Apply**.
    4. **Otherwise, If** `Op` *is* `complete`:
       1. **If** `Match` **has any value** → **Edit Reminder** `Match` → set **Is Completed** to
          **on**. **End If**. (Not there yet? The next run will catch it once the create is applied.)
-   5. **End If**.
+   5. **Otherwise, If** `Op` *is* `update` (a new due date set in LTFI):
+      1. **If** `Match` **has any value**:
+         1. **Get Dictionary Value** `dueDate` from the *Repeat Item* → Set Variable `NewDue`.
+         2. **Get Dates from Input** (`NewDue`) → Set Variable `NewDueDate`. (`dueDate` is always
+            full ISO 8601 with offset, e.g. `2026-10-11T00:00:00-04:00`; midnight means "that day".)
+         3. **Edit Reminder** `Match` → **Due Date** → `NewDueDate`.
+      2. **End If**. (Not there? Nothing to do; LTFI keeps listing it until an export shows the date.)
+   6. **End If** (closes the create / complete / update chain — the Shortcuts editor adds one
+      **End If** per **If**, so you'll see the matching ones nested).
 5. **End Repeat**.
 
 Then open **LTFI Export** and add **Run Shortcut → LTFI Apply** as its very first action (step 2.0).
@@ -174,11 +185,15 @@ Field notes:
     "writtenAt": "2026-10-04T18:20:00-04:00",
     "commands": [
       { "op": "create", "url": "ltfi://r/3f2c…e1", "title": "Order filament", "notes": "",
-        "list": "LTFI", "dueDate": "2026-10-10", "priority": "None" },
-      { "op": "complete", "url": "ltfi://r/20261001090000-54321" }
+        "list": "LTFI", "dueDate": "2026-10-10T00:00:00-04:00", "priority": "None" },
+      { "op": "complete", "url": "ltfi://r/20261001090000-54321" },
+      { "op": "update", "url": "ltfi://r/20260928140000-11111", "dueDate": "2026-10-11T09:30:00-04:00" }
     ]
   }
   ```
+- `update` carries only `dueDate` (never empty: LTFI can set a due date but not remove one). There
+  is at most one pending `update` per reminder; pushing again replaces its date. For a reminder
+  whose `create` is still pending, LTFI changes the create's `dueDate` instead of adding an update.
 - `priority` is `None`/`Low`/`Medium`/`High`. LTFI's default (Medium) goes out as `None`.
 - Which list a new reminder goes into: tasks under the standing project **Life** go into the list
   named by their **area** (e.g. Life / GATECH → list GATECH). Every other task goes into the list
@@ -231,7 +246,7 @@ still waiting for the iPhone.
   This is re-applied on every sync. The exception is a reminder **LTFI created**: it keeps the
   project/area you gave it in LTFI, whatever list it lives in.
 - **Upsert.** Title, notes, due date, priority, list and project/area come from the phone on every
-  sync. LTFI's In-progress/Deferred status and focus time are kept.
+  sync (except a due date LTFI pushed that the phone hasn't confirmed yet). LTFI's In-progress/Deferred status and focus time are kept.
 - **Priority.** High → High (flagged + High → Urgent), Medium → Medium, Low → Low, None → Medium.
   pyicloud-style numbers 1/5/9/0 map the same way.
 - **Completion.** Completed on the phone: the task is completed with the phone's completion date,
@@ -241,8 +256,15 @@ still waiting for the iPhone.
   A reminder with no `ltfi://` URL yet can't be targeted from LTFI, so completing it in LTFI is
   blocked — complete it on the phone (or let the export Shortcut stamp a URL first). Reopening a
   reminder on the phone does not reopen the LTFI task.
+- **Due dates set in LTFI.** Only reminders with an `ltfi://` URL can get one (otherwise: change it on
+  the phone). While the `update` is unconfirmed the task shows **PENDING** and the sync keeps LTFI's
+  date instead of the export's. It is confirmed when the export shows that due date — the same
+  instant within a minute, or the same local day when either side is midnight / date-only (all-day).
+  After that the phone owns the due date again. If the phone created a reminder from an older
+  `outbox.json` (iCloud lag) and so lacks a due date LTFI set meanwhile, the sync sends that date as
+  an `update`.
 - **Outbox confirmation.** A `create` is confirmed when an export contains a reminder with that URL;
-  a `complete` when that URL is completed. Confirmed commands drop out of `outbox.json`; the file
+  a `complete` when that URL is completed; an `update` as above. Confirmed commands drop out of `outbox.json`; the file
   always lists every unconfirmed one and is replaced atomically (written to `outbox.json.tmp`, then
   swapped in).
 - **Removed.** An open reminder that is missing from a non-empty export is marked removed (canceled,

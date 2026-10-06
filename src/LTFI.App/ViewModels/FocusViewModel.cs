@@ -39,6 +39,7 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
     private readonly AttentionAlert _alert;
     private readonly IAudioPlayer _audio;
     private readonly NotificationSounds _sounds;
+    private readonly ShellSignals _signals;
     private readonly DispatcherTimer _timer;
 
     /// <summary>The NSDR run the audio state belongs to is live (edge-detects NSDR start/end).</summary>
@@ -143,8 +144,10 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
         FocusSettings settings,
         AttentionAlert alert,
         [FromKeyedServices(AudioPlayers.Ambient)] IAudioPlayer audio,
-        NotificationSounds sounds)
+        NotificationSounds sounds,
+        ShellSignals signals)
     {
+        _signals = signals;
         _focus = focus;
         _pomodoro = pomodoro;
         _nsdr = nsdr;
@@ -444,6 +447,7 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
             _pomodoro.Reset();
             IsReviewing = false;
             FeedbackMessage = "Focus session saved.";
+            _signals.NotifyStatsChanged();
             await RefreshAsync();
         }
         catch (Exception ex)
@@ -499,6 +503,12 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
             {
                 var wasNsdr = _pomodoro.GetSnapshot() is { Phase: PomodoroPhase.Nsdr };
                 var transition = await _pomodoro.AdvanceAsync();
+                if (transition is PomodoroTransition.WorkEnded or PomodoroTransition.BreakEnded)
+                {
+                    // A work block / NSDR break may have recorded evidence (points, streak).
+                    _signals.NotifyStatsChanged();
+                }
+
                 switch (transition)
                 {
                     case PomodoroTransition.WorkEnded:
@@ -517,6 +527,7 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
             else if (_nsdr.IsRunning && !_pomodoro.IsActive && await _nsdr.CompleteIfDueAsync())
             {
                 FeedbackMessage = "NSDR complete — 10 minutes of deep rest logged (+3).";
+                _signals.NotifyStatsChanged();
                 EndNsdrAudio();
                 _alert.Raise(Chime.NsdrDone);
             }

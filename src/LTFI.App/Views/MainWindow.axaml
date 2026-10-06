@@ -41,13 +41,15 @@
                     <TextBlock Text="{Binding ClockText}" Classes="num" FontSize="10"
                                Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"/>
                     <TextBlock Text="·" Foreground="{DynamicResource TextFainterBrush}" VerticalAlignment="Center"/>
-                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-                        <TextBlock Text="PTS" FontSize="10" Foreground="{DynamicResource TextDimBrush}"/>
+                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" Background="Transparent"
+                                ToolTip.Tip="Points earned today (local day): task 10, check-in 10, focus session 5, commitment kept 5, NSDR 3, subtask 2">
+                        <TextBlock Text="PTS TODAY" FontSize="10" Foreground="{DynamicResource TextDimBrush}"/>
                         <TextBlock Text="{Binding PointsToday}" Classes="num" FontSize="10" FontWeight="Bold"
                                    Foreground="{DynamicResource TextBodyBrush}"/>
                     </StackPanel>
                     <TextBlock Text="·" Foreground="{DynamicResource TextFainterBrush}" VerticalAlignment="Center"/>
-                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" Background="Transparent"
+                                ToolTip.Tip="Activity streak: consecutive days with any recorded activity (the contribution graph's current streak). Today not done yet doesn't break it. The focus-only streak is in the Focus Debt panel.">
                         <TextBlock Text="STREAK" FontSize="10" Foreground="{DynamicResource TextDimBrush}"/>
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="{Binding StreakDays}" Classes="num" FontSize="10" FontWeight="Bold"
@@ -57,7 +59,8 @@
                         </StackPanel>
                     </StackPanel>
                     <TextBlock Text="·" Foreground="{DynamicResource TextFainterBrush}" VerticalAlignment="Center"/>
-                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" Background="Transparent"
+                                ToolTip.Tip="Active projects / limit. Standing projects (like Life) don't count toward the limit.">
                         <TextBlock Text="ACTIVE" FontSize="10" Foreground="{DynamicResource TextDimBrush}"/>
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="{Binding ActiveMeterFilled}" FontSize="10" LetterSpacing="2"

@@ -82,6 +82,7 @@ public partial class App : Application
         services.AddLtfiInfrastructure();
         services.AddLtfiAudio();
 
+        services.AddSingleton<ShellSignals>();
         services.AddSingleton<CommandCenterViewModel>();
         services.AddSingleton<RemindersPanelViewModel>();
         services.AddSingleton<TodayViewModel>();

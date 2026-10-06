@@ -29,6 +29,15 @@ public sealed class TaskService(
         "This reminder can't be completed from LTFI yet: complete it on your phone " +
         "(no LTFI id yet — export with URL stamping first).";
 
+    /// <summary>Shown when a due-date change can't be pushed (no ltfi:// URL yet).</summary>
+    public const string NoLtfiIdDueMessage =
+        "This reminder's due date can't be changed from LTFI yet: change it on your phone " +
+        "(no LTFI id yet — export with URL stamping first).";
+
+    /// <summary>The outbox can set a due date but not remove one.</summary>
+    public const string CannotClearDueMessage =
+        "LTFI can't remove a reminder's due date on the iPhone — clear it there (or pick another date).";
+
     private readonly IDbContextFactory<LtfiDbContext> _contextFactory = contextFactory;
     private readonly IReminderOutbox? _outbox = outbox;
     private readonly RemindersSettings _settings = settings ?? new RemindersSettings();
@@ -149,6 +158,16 @@ public sealed class TaskService(
         var (project, area) = await ResolvePlacementAsync(db, draft, placedByLtfi, cancellationToken);
         var wasCompleted = task.Status == TaskStatus.Completed;
 
+        // A new due date on a reminder the iPhone already has goes out as an "update" command (while
+        // its create is still pending, the create below carries it instead).
+        var pushDue = task.DueAt != draft.DueAt
+                      && task.ExternalSource == ReminderRules.SourceKey
+                      && await FindPendingCreateAsync(db, task, cancellationToken) is null;
+        if (pushDue)
+        {
+            EnsureCanPushDue(task, draft.DueAt);
+        }
+
         task.ProjectId = project?.Id;
         task.AreaId = area?.Id;
         task.Title = draft.Title.Trim();
@@ -168,6 +187,11 @@ public sealed class TaskService(
 
         // Still waiting for the iPhone to create it: the create command carries the edits.
         var outboxChanged = await RefreshPendingCreateAsync(db, task, project, area, cancellationToken);
+        if (pushDue)
+        {
+            await QueueDueUpdateAsync(db, task, now, cancellationToken);
+            outboxChanged = true;
+        }
         outboxChanged |= QueueCompletionWriteBack(db, task, wasCompleted, now);
 
         RecordCompletionEvidence(db, task, wasCompleted);
@@ -225,6 +249,105 @@ public sealed class TaskService(
         {
             await FlushOutboxAsync(cancellationToken);
         }
+    }
+
+    public async Task SetDueDateAsync(Guid id, DateTimeOffset due, CancellationToken cancellationToken = default)
+    {
+        await using var db = await _contextFactory.CreateDbContextAsync(cancellationToken);
+        var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == id, cancellationToken)
+            ?? throw new InvalidOperationException("Task could not be found.");
+
+        await SetDueCoreAsync(db, task, due, cancellationToken);
+    }
+
+    public async Task<DateTimeOffset> PushDueByDaysAsync(Guid id, int days, CancellationToken cancellationToken = default)
+    {
+        await using var db = await _contextFactory.CreateDbContextAsync(cancellationToken);
+        var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == id, cancellationToken)
+            ?? throw new InvalidOperationException("Task could not be found.");
+
+        var due = ShiftDue(task.DueAt, days, DateTime.Today);
+        await SetDueCoreAsync(db, task, due, cancellationToken);
+        return due;
+    }
+
+    /// <summary>
+    /// <paramref name="due"/> moved by <paramref name="days"/> local calendar days at the same local
+    /// time of day (so local midnight stays midnight across DST changes); with no due date, counts
+    /// from <paramref name="today"/>'s local midnight.
+    /// </summary>
+    public static DateTimeOffset ShiftDue(DateTimeOffset? due, int days, DateTime today)
+    {
+        var local = (due is { } d ? d.LocalDateTime : today.Date).AddDays(days);
+        local = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
+        return new DateTimeOffset(local, TimeZoneInfo.Local.GetUtcOffset(local));
+    }
+
+    private async Task SetDueCoreAsync(LtfiDbContext db, TaskItem task, DateTimeOffset due, CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.Now;
+        var outboxChanged = false;
+        if (task.ExternalSource == ReminderRules.SourceKey)
+        {
+            EnsureCanPushDue(task, due);
+            task.DueAt = due;
+            if (await FindPendingCreateAsync(db, task, cancellationToken) is { } create)
+            {
+                // The iPhone hasn't made it yet: the create carries the new date.
+                create.PayloadJson = ReminderOutbox.CreatePayload(task);
+            }
+            else
+            {
+                await QueueDueUpdateAsync(db, task, now, cancellationToken);
+            }
+
+            outboxChanged = true;
+        }
+        else
+        {
+            task.DueAt = due;
+        }
+
+        task.UpdatedAt = now;
+        await db.SaveChangesAsync(cancellationToken);
+        if (outboxChanged)
+        {
+            await FlushOutboxAsync(cancellationToken);
+        }
+    }
+
+    /// <summary>The outbox can only target a reminder by its ltfi:// url, and can't remove a due date.</summary>
+    private static void EnsureCanPushDue(TaskItem task, DateTimeOffset? due)
+    {
+        if (!ReminderRules.IsLtfiUrl(task.ExternalId))
+        {
+            throw new InvalidOperationException(NoLtfiIdDueMessage);
+        }
+
+        if (due is null)
+        {
+            throw new InvalidOperationException(CannotClearDueMessage);
+        }
+    }
+
+    /// <summary>Queues (or coalesces into the pending) "update" command with the task's DueAt.</summary>
+    private static async Task QueueDueUpdateAsync(LtfiDbContext db, TaskItem task, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var url = task.ExternalId!;
+        var pending = await db.Outbox.FirstOrDefaultAsync(
+            c => c.ExternalUrl == url && c.Op == OutboxCommand.UpdateOp && c.ConfirmedAt == null, cancellationToken);
+        ReminderOutbox.EnqueueUpdate(db, task, pending, now);
+    }
+
+    private static async Task<OutboxCommand?> FindPendingCreateAsync(LtfiDbContext db, TaskItem task, CancellationToken cancellationToken)
+    {
+        if (task.ExternalId is not { } url || !ReminderRules.IsLtfiCreatedUrl(url))
+        {
+            return null;
+        }
+
+        return await db.Outbox.FirstOrDefaultAsync(
+            c => c.ExternalUrl == url && c.Op == OutboxCommand.CreateOp && c.ConfirmedAt == null, cancellationToken);
     }
 
     private string LtfiList =>
@@ -293,13 +416,7 @@ public sealed class TaskService(
     private async Task<bool> RefreshPendingCreateAsync(
         LtfiDbContext db, TaskItem task, Project? project, ProjectArea? area, CancellationToken cancellationToken)
     {
-        if (task.ExternalId is not { } url || !ReminderRules.IsLtfiCreatedUrl(url))
-        {
-            return false;
-        }
-
-        var create = await db.Outbox.FirstOrDefaultAsync(
-            c => c.ExternalUrl == url && c.Op == OutboxCommand.CreateOp && c.ConfirmedAt == null, cancellationToken);
+        var create = await FindPendingCreateAsync(db, task, cancellationToken);
         if (create is null)
         {
             return false;

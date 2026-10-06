@@ -34,6 +34,7 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
     private readonly IEvidenceService _evidence;
     private readonly IInsightsService _insights;
     private readonly ICommitmentService _commitments;
+    private readonly ShellSignals _signals;
     private readonly DispatcherTimer _clock;
 
     private readonly Dictionary<Guid, string> _projectTitles = new();
@@ -131,8 +132,10 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
         IReviewService review,
         IEvidenceService evidence,
         IInsightsService insights,
-        ICommitmentService commitments)
+        ICommitmentService commitments,
+        ShellSignals signals)
     {
+        _signals = signals;
         _focus = focus;
         _pomodoro = pomodoro;
         _nsdr = nsdr;
@@ -214,6 +217,7 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
         try
         {
             await _commitments.KeepAsync(id);
+            _signals.NotifyStatsChanged(); // +5 points, maybe today's first activity
             await LoadCommitmentsAsync();
             await LoadContributionsAsync();
             await LoadEvidenceAsync();
