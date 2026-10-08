@@ -144,9 +144,17 @@
                 <StackPanel Spacing="14">
                     <TextBlock Classes="page-title" FontSize="20" Text="{Binding EditorTitle}"/>
 
-                    <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap"
-                               IsVisible="{Binding IsCreatingNew}"
-                               Text="{Binding CreateTargetText}"/>
+                    <!-- Target list, from the same rule TaskService uses (ReminderRules.TargetList) -->
+                    <StackPanel Spacing="2" IsVisible="{Binding IsCreatingNew}">
+                        <TextBlock FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"
+                                   Text="{Binding CreateTargetText}"/>
+                        <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap"
+                                   Text="Shows PENDING ON iPHONE until LTFI Apply runs and the next export comes back."/>
+                    </StackPanel>
+
+                    <TextBlock FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"
+                               IsVisible="{Binding HasExistingList}"
+                               Text="{Binding ExistingListText}"/>
 
                     <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap"
                                IsVisible="{Binding SelectedTask.IsExternal, FallbackValue=False}"
@@ -181,7 +189,7 @@
                             </ComboBox>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Spacing="6">
-                            <TextBlock Classes="section-header" Text="AREA"/>
+                            <TextBlock Classes="section-header" Text="{Binding AreaHeaderText}"/>
                             <ComboBox HorizontalAlignment="Stretch"
                                       IsEnabled="{Binding CanEditPlacement}"
                                       ItemsSource="{Binding AreaOptions}"

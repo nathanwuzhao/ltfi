@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:LTFI.ViewModels"
+             xmlns:c="using:LTFI.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              x:Class="LTFI.Views.FocusView"
@@ -31,8 +32,10 @@
                                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                     Content="FREE · COUNT UP" Command="{Binding UseFreeCommand}"/>
                         </Grid>
-                        <TextBlock Classes="faint" FontSize="10" TextWrapping="Wrap" IsVisible="{Binding IsPomodoroMode}"
-                                   Text="25:00 work, 5:00 break, 15:00 long break after every 4th. Only work time counts toward the session."/>
+                        <!-- WrapTextBlock: a plain TextBlock lost this hint's 2nd line at 125% scaling
+                             (layout rounding vs. TextLayout's MaxHeight; see Controls/WrapTextBlock.cs) -->
+                        <c:WrapTextBlock Classes="faint" FontSize="10" TextWrapping="Wrap" IsVisible="{Binding IsPomodoroMode}"
+                                         Text="25:00 work, 5:00 break, 15:00 long break after every 4th. Only work time counts toward the session."/>
                     </StackPanel>
 
                     <StackPanel Spacing="6">
@@ -112,7 +115,7 @@
                 <!-- Active: the running timer -->
                 <StackPanel Spacing="16" IsVisible="{Binding ShowActive}">
                     <TextBlock Classes="section-header" Text="CURRENT OPERATION"/>
-                    <TextBlock Text="{Binding CurrentObjective}" FontSize="16" TextWrapping="Wrap"/>
+                    <c:WrapTextBlock Text="{Binding CurrentObjective}" FontSize="16" TextWrapping="Wrap"/>
 
                     <!-- Free mode: count up -->
                     <TextBlock Text="{Binding ElapsedText}" IsVisible="{Binding ShowFreeTimer}"

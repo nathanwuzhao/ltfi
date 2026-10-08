@@ -53,6 +53,24 @@ public static class ReminderRules
             ? c.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture)
             : string.Empty;
 
+    /// <summary>The iPhone list non-standing tasks go to when settings <c>reminders.ltfiList</c> is empty.</summary>
+    public const string DefaultLtfiList = "LTFI";
+
+    /// <summary>The configured LTFI list (trimmed), or <see cref="DefaultLtfiList"/> when blank.</summary>
+    public static string LtfiListOrDefault(string? configured) =>
+        string.IsNullOrWhiteSpace(configured) ? DefaultLtfiList : configured.Trim();
+
+    /// <summary>
+    /// The iPhone Reminders list a task LTFI creates goes into: a standing project's task goes into the
+    /// list named by its area; every other task (any other project, or none) into the LTFI list.
+    /// Null when a standing project has no area yet — the task can't be placed until one is picked.
+    /// Shared by <c>TaskService</c> (what it writes) and the Tasks editor (what it says).
+    /// </summary>
+    public static string? TargetList(bool projectIsStanding, string? areaName, string? configuredLtfiList) =>
+        projectIsStanding
+            ? string.IsNullOrWhiteSpace(areaName) ? null : areaName
+            : LtfiListOrDefault(configuredLtfiList);
+
     /// <summary>True for an <c>ltfi://r/…</c> id (stamped by LTFI or by the export Shortcut).</summary>
     public static bool IsLtfiUrl(string? value) =>
         value is not null

@@ -95,3 +95,5 @@ service changes.
 - **Seen, not changed:** on Focus the pomodoro hint ("…counts toward the session.") draws only its
   first line at 125% scaling. The 2-line space is reserved but line 2 isn't drawn. This looks like
   Avalonia dropping a last line at fractional DPI, not width-related.
+  **Fixed 2026-10-08**, see `2026-10-08-target-list-text-wrap-fix.md` (layout rounding vs.
+  TextLayout MaxHeight; `WrapTextBlock`).

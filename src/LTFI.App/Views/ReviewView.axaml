@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:LTFI.ViewModels"
+             xmlns:c="using:LTFI.Controls"
              xmlns:abs="using:LTFI.Core.Abstractions"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -113,7 +114,7 @@
                         <Button Grid.Column="1" Classes="ghost" Margin="8,0,0,0" Content="SAVE KEY"
                                 Command="{Binding SaveApiKeyCommand}"/>
                     </Grid>
-                    <TextBlock Classes="faint" FontSize="10" TextWrapping="Wrap"
+                    <c:WrapTextBlock Classes="faint" FontSize="10" TextWrapping="Wrap"
                                Text="Model / base URL: %AppData%/LTFI/llm-settings.json (optional). The coach sends this week's numbers and evidence titles to the endpoint with store:false."/>
                 </StackPanel>
             </Border>
@@ -224,7 +225,7 @@
                     <TextBlock Classes="micro" Text="SIT WITH THIS"/>
                     <TextBlock Classes="bright" TextWrapping="Wrap" FontStyle="Italic" Text="{Binding CoachQuestion}"/>
 
-                    <TextBlock Classes="faint" FontSize="10" TextWrapping="Wrap" Text="{Binding CoachMeta}"/>
+                    <c:WrapTextBlock Classes="faint" FontSize="10" TextWrapping="Wrap" Text="{Binding CoachMeta}"/>
                 </StackPanel>
             </Border>
 

@@ -111,7 +111,7 @@ public sealed class TaskService(
 
         // Standing-project tasks go into the list named by their area; everything else into the
         // LTFI list. The project/area recorded here is kept by the sync (LTFI-minted url).
-        var list = project?.IsStanding == true ? area!.Name : LtfiList;
+        var list = TargetList(project, area);
 
         var now = DateTimeOffset.Now;
         var task = new TaskItem
@@ -350,8 +350,11 @@ public sealed class TaskService(
             c => c.ExternalUrl == url && c.Op == OutboxCommand.CreateOp && c.ConfirmedAt == null, cancellationToken);
     }
 
-    private string LtfiList =>
-        string.IsNullOrWhiteSpace(_settings.LtfiList) ? "LTFI" : _settings.LtfiList.Trim();
+    /// <summary>The list a task placed in this project/area goes into (<see cref="ReminderRules.TargetList"/>).
+    /// Callers have already checked that a standing project has an area.</summary>
+    private string TargetList(Project? project, ProjectArea? area) =>
+        ReminderRules.TargetList(project?.IsStanding == true, area?.Name, _settings.LtfiList)
+        ?? throw new InvalidOperationException("Pick an area — it's the iPhone list this goes to.");
 
     /// <summary>Loads and checks the draft's project/area: the area must belong to the project, and a
     /// standing project needs an area (its name is the Reminders list).</summary>
@@ -422,7 +425,7 @@ public sealed class TaskService(
             return false;
         }
 
-        task.ExternalList = project?.IsStanding == true ? area!.Name : LtfiList;
+        task.ExternalList = TargetList(project, area);
         create.PayloadJson = ReminderOutbox.CreatePayload(task);
         return true;
     }

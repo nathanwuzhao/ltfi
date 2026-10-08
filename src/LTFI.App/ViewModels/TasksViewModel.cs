@@ -69,6 +69,7 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
     [NotifyPropertyChangedFor(nameof(CanManageSubtasks))]
     [NotifyPropertyChangedFor(nameof(IsPlacementLocked))]
     [NotifyPropertyChangedFor(nameof(CanEditPlacement))]
+    [NotifyPropertyChangedFor(nameof(ExistingListText), nameof(HasExistingList))]
     private TaskItem? selectedTask;
 
     [ObservableProperty]
@@ -80,6 +81,7 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
     [NotifyPropertyChangedFor(nameof(SaveButtonText))]
     [NotifyPropertyChangedFor(nameof(CanManageSubtasks))]
     [NotifyCanExecuteChangedFor(nameof(AddSubtaskCommand))]
+    [NotifyPropertyChangedFor(nameof(ExistingListText), nameof(HasExistingList))]
     private bool isCreatingNew = true;
 
     [ObservableProperty]
@@ -101,7 +103,7 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
     private string requiredMinutesText = string.Empty;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CreateTargetText))]
+    [NotifyPropertyChangedFor(nameof(CreateTargetText), nameof(AreaHeaderText))]
     private ProjectOption? selectedProjectOption;
 
     [ObservableProperty]
@@ -164,18 +166,49 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
 
     public bool CanEditPlacement => !IsPlacementLocked;
 
-    /// <summary>Which iPhone list a new task will be created in.</summary>
+    private bool IsStandingSelected => SelectedProjectOption is { IsStanding: true };
+
+    /// <summary>
+    /// Which iPhone list a new task goes into — the same rule <c>TaskService.CreateAsync</c> applies
+    /// (<see cref="ReminderRules.TargetList"/>).
+    /// </summary>
     public string CreateTargetText
     {
         get
         {
-            var list = SelectedProjectOption is { IsStanding: true }
-                ? SelectedAreaOption?.Id is null ? "(pick an area — it is the list)" : SelectedAreaOption.Name
-                : string.IsNullOrWhiteSpace(_remindersSettings.LtfiList) ? "LTFI" : _remindersSettings.LtfiList.Trim();
-            return $"Creates a reminder in the iPhone list \"{list}\". It shows as PENDING ON iPHONE until the " +
-                   "LTFI Apply Shortcut has run and the next export comes back.";
+            var list = ReminderRules.TargetList(
+                IsStandingSelected,
+                SelectedAreaOption?.Id is null ? null : SelectedAreaOption.Name,
+                _remindersSettings.LtfiList);
+            if (list is null)
+            {
+                return "Pick an area — it's the iPhone list this goes to.";
+            }
+
+            if (IsStandingSelected)
+            {
+                return $"→ iPhone list: {list}";
+            }
+
+            // Name the standing project when there's exactly one (normally Life).
+            var standing = ProjectOptions.Where(o => o.IsStanding).Select(o => o.Name).ToList();
+            var why = SelectedProjectOption?.Id is null ? "no project"
+                : standing.Count == 1 ? $"non-{standing[0]} project"
+                : "not a standing project";
+            return $"→ iPhone list: {list} ({why})";
         }
     }
+
+    /// <summary>The area picker's label: for a standing project the area is the phone list.</summary>
+    public string AreaHeaderText => IsStandingSelected ? "AREA = iPHONE LIST" : "AREA (LTFI only)";
+
+    /// <summary>Where an existing reminder-backed task lives on the phone; empty when not known.</summary>
+    public string ExistingListText =>
+        !IsCreatingNew && SelectedTask is { IsExternal: true, ExternalList: { Length: > 0 } list }
+            ? $"iPhone list: {list}"
+            : string.Empty;
+
+    public bool HasExistingList => ExistingListText.Length > 0;
 
     public async Task RefreshAsync()
     {
@@ -190,6 +223,7 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
             ProjectOptions.Add(new ProjectOption(project.Id, project.Title, project.IsStanding));
         }
         _suppressProjectChange = false;
+        OnPropertyChanged(nameof(CreateTargetText)); // names the standing project, so depends on the options
 
         var tasks = await _taskService.GetAllAsync();
         _allTasks.Clear();
