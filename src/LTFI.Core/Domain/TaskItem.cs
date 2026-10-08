@@ -86,6 +86,9 @@ public class TaskItem
     /// </summary>
     public TimeSpan TimeSpent { get; set; }
 
+    /// <summary>True once any focus time has been tracked (derived, not stored).</summary>
+    public bool HasTimeSpent => TimeSpent > TimeSpan.Zero;
+
     /// <summary>True if no required time is set, or the given accumulated focus time meets it.</summary>
     public bool MeetsRequiredTime(TimeSpan spent) =>
         RequiredTime is not { } required || spent >= required;

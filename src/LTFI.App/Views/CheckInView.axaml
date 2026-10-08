@@ -89,9 +89,8 @@
                                             <TextBlock Grid.Column="1" Classes="bright" FontSize="11.5"
                                                        TextWrapping="Wrap" Text="{Binding Prompt}"/>
                                         </Grid>
-                                        <TextBox Text="{Binding Answer, Mode=TwoWay}"
-                                                 AcceptsReturn="True" TextWrapping="Wrap"
-                                                 MinHeight="54" FontSize="11.5"/>
+                                        <TextBox Classes="multi" MinHeight="54" FontSize="11.5"
+                                                 Text="{Binding Answer, Mode=TwoWay}"/>
                                     </StackPanel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
@@ -139,9 +138,8 @@
                                             <TextBlock Grid.Column="1" Classes="bright" FontSize="11.5"
                                                        TextWrapping="Wrap" Text="{Binding Prompt}"/>
                                         </Grid>
-                                        <TextBox Text="{Binding Answer, Mode=TwoWay}"
-                                                 AcceptsReturn="True" TextWrapping="Wrap"
-                                                 MinHeight="54" FontSize="11.5"/>
+                                        <TextBox Classes="multi" MinHeight="54" FontSize="11.5"
+                                                 Text="{Binding Answer, Mode=TwoWay}"/>
                                     </StackPanel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>

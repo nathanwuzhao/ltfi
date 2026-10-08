@@ -4,6 +4,8 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LTFI.Core.Abstractions;
@@ -18,6 +20,12 @@ public sealed record ProjectOption(Guid? Id, string Name, bool IsStanding = fals
 
 /// <summary>A choice in the task's area dropdown (areas of the selected project); <c>Id == null</c> = no area.</summary>
 public sealed record AreaOption(Guid? Id, string Name);
+
+/// <summary>A non-selectable section header row in the Tasks list ("OVERDUE  3").</summary>
+public sealed record TaskGroupHeader(string Label, int Count, bool IsAlert, bool IsFirst)
+{
+    public Thickness Margin => IsFirst ? new Thickness(0, 0, 0, 2) : new Thickness(0, 12, 0, 2);
+}
 
 /// <summary>
 /// View, edit, and delete tasks, assign them to a project/area, and manage subtasks. Every task is
@@ -35,8 +43,13 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
     private bool _suppressSelectionLoad;
     private bool _suppressProjectChange;
     private int _areaLoadVersion;
+    private bool _rebuildingRows;
 
+    /// <summary>The visible tasks in display order (no headers).</summary>
     public ObservableCollection<TaskItem> Tasks { get; } = [];
+
+    /// <summary>What the list shows: <see cref="TaskGroupHeader"/> rows followed by their <see cref="TaskItem"/>s.</summary>
+    public ObservableCollection<object> Rows { get; } = [];
 
     public ObservableCollection<ProjectOption> ProjectOptions { get; } = [];
 
@@ -100,6 +113,26 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
     /// <summary>When false (default), Completed/Canceled tasks are hidden from the list.</summary>
     [ObservableProperty]
     private bool showArchived;
+
+    /// <summary>The list row bound to the ListBox; only a <see cref="TaskItem"/> is a real selection.</summary>
+    [ObservableProperty]
+    private object? selectedRow;
+
+    // Grouping / sort choices live on this singleton VM, so they persist for the session.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsGroupDue), nameof(IsGroupArea), nameof(IsGroupNone))]
+    private TaskGrouping grouping = TaskGrouping.Due;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSortDue), nameof(IsSortPriority), nameof(IsSortTitle))]
+    private TaskSort sort = TaskSort.Due;
+
+    public bool IsGroupDue => Grouping == TaskGrouping.Due;
+    public bool IsGroupArea => Grouping == TaskGrouping.Area;
+    public bool IsGroupNone => Grouping == TaskGrouping.None;
+    public bool IsSortDue => Sort == TaskSort.Due;
+    public bool IsSortPriority => Sort == TaskSort.Priority;
+    public bool IsSortTitle => Sort == TaskSort.Title;
 
     public TasksViewModel(
         ITaskService taskService,
@@ -169,16 +202,82 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
     private static bool IsArchived(TaskItem task) =>
         task.Status is TaskStatus.Completed or TaskStatus.Canceled;
 
+    partial void OnGroupingChanged(TaskGrouping value) => RebuildRows();
+
+    partial void OnSortChanged(TaskSort value) => RebuildRows();
+
+    [RelayCommand]
+    private void SetGrouping(TaskGrouping value) => Grouping = value;
+
+    [RelayCommand]
+    private void SetSort(TaskSort value) => Sort = value;
+
+    /// <summary>
+    /// Re-groups/re-sorts the same tasks without touching the editor (so unsaved edits survive a
+    /// GROUP/SORT click); the selected task stays selected.
+    /// </summary>
+    private void RebuildRows()
+    {
+        var selected = SelectedTask;
+        _rebuildingRows = true;
+        try
+        {
+            Rows.Clear();
+            Tasks.Clear();
+            var visible = _allTasks.Where(t => ShowArchived || !IsArchived(t));
+            var today = DateOnly.FromDateTime(DateTime.Now);
+            foreach (var group in TaskAgenda.Build(visible, today, Grouping, Sort))
+            {
+                // A flat list needs no header for its open tasks; COMPLETED still gets one.
+                if (!(Grouping == TaskGrouping.None && group.Key != TaskAgenda.CompletedKey))
+                {
+                    Rows.Add(new TaskGroupHeader(group.Label, group.Tasks.Count, group.IsAlert, Rows.Count == 0));
+                }
+
+                foreach (var task in group.Tasks)
+                {
+                    Rows.Add(task);
+                    Tasks.Add(task);
+                }
+            }
+        }
+        finally
+        {
+            _rebuildingRows = false;
+        }
+
+        // Null first so the ListBox is re-pointed even if the old value never got cleared.
+        SelectedRow = null;
+        SelectedRow =selected is not null && Tasks.Contains(selected) ? selected : null;
+    }
+
+    // ListBox → VM. Clearing the rows pushes null here; a header row is never a selection.
+    partial void OnSelectedRowChanged(object? value)
+    {
+        if (_rebuildingRows)
+        {
+            return;
+        }
+
+        switch (value)
+        {
+            case TaskItem task:
+                SelectedTask = task;
+                break;
+            case TaskGroupHeader:
+                // e.g. arrow keys landed on a header: put the list back on the real selection.
+                Dispatcher.UIThread.Post(() => SelectedRow = SelectedTask);
+                break;
+        }
+    }
+
     private void ApplyFilter(Guid? preferredId)
     {
         _suppressSelectionLoad = true;
-        Tasks.Clear();
-        foreach (var task in _allTasks.Where(t => ShowArchived || !IsArchived(t)))
-        {
-            Tasks.Add(task);
-        }
+        RebuildRows();
 
         SelectedTask = Tasks.FirstOrDefault(t => t.Id == preferredId);
+        SelectedRow = SelectedTask;
         _suppressSelectionLoad = false;
 
         if (SelectedTask is null)
@@ -374,6 +473,7 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
     partial void OnSelectedTaskChanged(TaskItem? value)
     {
         DeleteTaskCommand.NotifyCanExecuteChanged();
+        SelectedRow = value;
 
         if (_suppressSelectionLoad || value is null)
         {

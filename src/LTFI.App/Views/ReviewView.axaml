@@ -8,7 +8,7 @@
              x:DataType="vm:ReviewViewModel"
              mc:Ignorable="d">
 
-    <ScrollViewer>
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="28" Spacing="16">
             <TextBlock Classes="page-title" Text="{Binding Header}"/>
             <TextBlock Classes="muted" Text="The last 7 days, from your local data."/>

@@ -59,7 +59,7 @@
 
         <!-- Editor -->
         <Border Grid.Row="1" Grid.Column="1" Classes="card" Margin="0,18,0,0">
-            <ScrollViewer>
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Spacing="14">
                     <TextBlock Classes="page-title" FontSize="20" Text="{Binding EditorTitle}"/>
 
@@ -98,8 +98,7 @@
 
                     <StackPanel Spacing="6">
                         <TextBlock Classes="section-header" Text="DESCRIPTION"/>
-                        <TextBox Text="{Binding DraftDescription, Mode=TwoWay}"
-                                 AcceptsReturn="True" TextWrapping="Wrap" MinHeight="80"/>
+                        <TextBox Classes="multi" MinHeight="80" Text="{Binding DraftDescription, Mode=TwoWay}"/>
                     </StackPanel>
 
                     <StackPanel Spacing="6">
@@ -113,7 +112,7 @@
 
                     <StackPanel Spacing="6">
                         <TextBlock Classes="section-header" Text="DONE CONDITION"/>
-                        <TextBox Text="{Binding DraftDoneCondition, Mode=TwoWay}"
+                        <TextBox Classes="multi" MinHeight="44" Text="{Binding DraftDoneCondition, Mode=TwoWay}"
                                  PlaceholderText="What does finishing this project look like?"/>
                     </StackPanel>
 

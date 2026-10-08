@@ -13,7 +13,7 @@
 
         <!-- Task list -->
         <Border Grid.Row="1" Classes="card" Margin="0,18,12,0">
-            <Grid RowDefinitions="Auto,*">
+            <Grid RowDefinitions="Auto,Auto,*">
                 <Grid ColumnDefinitions="Auto,*,Auto">
                     <Button Content="New Task"
                             Classes="primary"
@@ -23,17 +23,66 @@
                     <CheckBox Grid.Column="2"
                               Content="Show archived"
                               VerticalAlignment="Center"
-                              IsChecked="{Binding ShowArchived, Mode=TwoWay}"/>
+                              IsChecked="{Binding ShowArchived, Mode=TwoWay}"
+                              ToolTip.Tip="Also list completed and canceled tasks (in a COMPLETED section at the end)"/>
                 </Grid>
 
-                <ListBox Grid.Row="1"
-                         Margin="0,14,0,0"
+                <!-- GROUP: DUE | AREA | NONE    SORT: DUE | PRIORITY | TITLE (wraps when narrow) -->
+                <WrapPanel Grid.Row="1" Margin="0,12,0,0" Orientation="Horizontal">
+                    <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,16,4">
+                        <TextBlock Classes="micro-dim" Text="GROUP" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <Button Classes="seg" Classes.selected="{Binding IsGroupDue}" Padding="8,3" FontSize="9.5"
+                                Content="DUE" Command="{Binding SetGroupingCommand}"
+                                CommandParameter="{x:Static domain:TaskGrouping.Due}"
+                                ToolTip.Tip="Agenda: overdue, today, tomorrow, this week, later, no due date"/>
+                        <Button Classes="seg" Classes.selected="{Binding IsGroupArea}" Padding="8,3" FontSize="9.5"
+                                Content="AREA" Command="{Binding SetGroupingCommand}"
+                                CommandParameter="{x:Static domain:TaskGrouping.Area}"
+                                ToolTip.Tip="One section per area (#list); tasks without an area last"/>
+                        <Button Classes="seg" Classes.selected="{Binding IsGroupNone}" Padding="8,3" FontSize="9.5"
+                                Content="NONE" Command="{Binding SetGroupingCommand}"
+                                CommandParameter="{x:Static domain:TaskGrouping.None}"
+                                ToolTip.Tip="One flat list in the chosen sort order"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,0,4">
+                        <TextBlock Classes="micro-dim" Text="SORT" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <Button Classes="seg" Classes.selected="{Binding IsSortDue}" Padding="8,3" FontSize="9.5"
+                                Content="DUE" Command="{Binding SetSortCommand}"
+                                CommandParameter="{x:Static domain:TaskSort.Due}"
+                                ToolTip.Tip="Due date (none last), then priority, then title"/>
+                        <Button Classes="seg" Classes.selected="{Binding IsSortPriority}" Padding="8,3" FontSize="9.5"
+                                Content="PRIORITY" Command="{Binding SetSortCommand}"
+                                CommandParameter="{x:Static domain:TaskSort.Priority}"
+                                ToolTip.Tip="Urgent first, then due date, then title"/>
+                        <Button Classes="seg" Classes.selected="{Binding IsSortTitle}" Padding="8,3" FontSize="9.5"
+                                Content="TITLE" Command="{Binding SetSortCommand}"
+                                CommandParameter="{x:Static domain:TaskSort.Title}"
+                                ToolTip.Tip="Title A→Z"/>
+                    </StackPanel>
+                </WrapPanel>
+
+                <!-- Rows = section headers (TaskGroupHeader, not selectable — see code-behind)
+                     followed by their tasks. -->
+                <ListBox x:Name="TaskList"
+                         Grid.Row="2"
+                         Margin="0,8,0,0"
                          Background="Transparent"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                         ItemsSource="{Binding Tasks}"
-                         SelectedItem="{Binding SelectedTask, Mode=TwoWay}">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate x:DataType="domain:TaskItem">
+                         ItemsSource="{Binding Rows}"
+                         SelectedItem="{Binding SelectedRow, Mode=TwoWay}">
+                    <ListBox.Styles>
+                        <Style Selector="TextBlock.micro.alert">
+                            <Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/>
+                        </Style>
+                    </ListBox.Styles>
+                    <ListBox.DataTemplates>
+                        <DataTemplate DataType="vm:TaskGroupHeader">
+                            <StackPanel Orientation="Horizontal" Spacing="8" Margin="{Binding Margin}">
+                                <TextBlock Classes="micro" Classes.alert="{Binding IsAlert}" Text="{Binding Label}"/>
+                                <TextBlock Classes="micro-dim num" VerticalAlignment="Center" Text="{Binding Count}"/>
+                            </StackPanel>
+                        </DataTemplate>
+                        <DataTemplate DataType="domain:TaskItem">
                             <!-- checkbox | info (takes the rest, trims) | status chips (auto width) -->
                             <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10" Margin="2">
                                 <!-- One-click complete. A completed iCloud reminder can't be re-opened
@@ -56,6 +105,7 @@
                                     <WrapPanel Orientation="Horizontal">
                                         <TextBlock Classes="muted" FontSize="12" Margin="0,0,8,0" Text="{Binding Priority}"/>
                                         <TextBlock Classes="muted" FontSize="12" Margin="0,0,8,0"
+                                                   IsVisible="{Binding HasTimeSpent}"
                                                    Text="{Binding TimeSpent, Converter={StaticResource DurationToClock}, StringFormat='· {0}'}"/>
                                         <!-- Due date only (no time) -->
                                         <TextBlock Classes="muted" FontSize="12" Margin="0,0,8,0"
@@ -83,14 +133,14 @@
                                 </StackPanel>
                             </Grid>
                         </DataTemplate>
-                    </ListBox.ItemTemplate>
+                    </ListBox.DataTemplates>
                 </ListBox>
             </Grid>
         </Border>
 
         <!-- Editor -->
         <Border Grid.Row="1" Grid.Column="1" Classes="card" Margin="0,18,0,0">
-            <ScrollViewer>
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Spacing="14">
                     <TextBlock Classes="page-title" FontSize="20" Text="{Binding EditorTitle}"/>
 
@@ -113,8 +163,7 @@
 
                     <StackPanel Spacing="6">
                         <TextBlock Classes="section-header" Text="DESCRIPTION"/>
-                        <TextBox Text="{Binding DraftDescription, Mode=TwoWay}"
-                                 AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70"/>
+                        <TextBox Classes="multi" MinHeight="70" Text="{Binding DraftDescription, Mode=TwoWay}"/>
                     </StackPanel>
 
                     <Grid ColumnDefinitions="*,*" ColumnSpacing="14">

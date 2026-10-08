@@ -10,8 +10,11 @@
     <Grid RowDefinitions="Auto,*" Margin="28">
         <TextBlock Classes="page-title" Text="{Binding Header}"/>
 
+        <!-- Stretch + MaxWidth = a fixed 560 column (centred by layout), never sized by its
+             content: with HorizontalAlignment=Center the card was auto-width, so typing in
+             the intent/review boxes made it grow sideways. -->
         <Border Grid.Row="1" Classes="card" Margin="0,18,0,0"
-                MaxWidth="560" HorizontalAlignment="Center" VerticalAlignment="Top">
+                MaxWidth="560" HorizontalAlignment="Stretch" VerticalAlignment="Top">
             <StackPanel Spacing="16">
 
                 <!-- Setup: choose what to work on -->
@@ -60,7 +63,8 @@
 
                     <StackPanel Spacing="6">
                         <TextBlock Classes="muted" Text="Intent"/>
-                        <TextBox Text="{Binding IntentText, Mode=TwoWay}"
+                        <TextBox Classes="multi" MinHeight="44"
+                                 Text="{Binding IntentText, Mode=TwoWay}"
                                  PlaceholderText="What will you get done this session?"/>
                     </StackPanel>
 
@@ -186,18 +190,17 @@
 
                     <StackPanel Spacing="6">
                         <TextBlock Classes="muted" Text="What changed?"/>
-                        <TextBox Text="{Binding ReviewSummary, Mode=TwoWay}"
-                                 AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60"/>
+                        <TextBox Classes="multi" Text="{Binding ReviewSummary, Mode=TwoWay}"/>
                     </StackPanel>
 
                     <StackPanel Spacing="6">
                         <TextBlock Classes="muted" Text="Blocker (if any)"/>
-                        <TextBox Text="{Binding ReviewBlocker, Mode=TwoWay}"/>
+                        <TextBox Classes="multi" MinHeight="44" Text="{Binding ReviewBlocker, Mode=TwoWay}"/>
                     </StackPanel>
 
                     <StackPanel Spacing="6">
                         <TextBlock Classes="muted" Text="Next concrete action"/>
-                        <TextBox Text="{Binding ReviewNext, Mode=TwoWay}"/>
+                        <TextBox Classes="multi" MinHeight="44" Text="{Binding ReviewNext, Mode=TwoWay}"/>
                     </StackPanel>
 
                     <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="10">
