@@ -75,6 +75,7 @@ public partial class TodayViewModel : ViewModelBase, IRefreshable
         HasTasks = TodayTasks.Count > 0;
 
         var projects = await _projectService.GetAllAsync();
+        ProjectBrushes.Remember(projects);
         // Standing projects (e.g. Life) don't count toward the limit, so they aren't counted here either.
         ActiveProjectCount = projects.Count(p => p.Status == ProjectStatus.Active && !p.IsStanding);
 

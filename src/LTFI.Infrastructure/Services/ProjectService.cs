@@ -58,6 +58,7 @@ public sealed class ProjectService(IDbContextFactory<LtfiDbContext> contextFacto
             DoneCondition = Normalize(draft.DoneCondition),
             TargetDate = draft.TargetDate,
             IsStanding = draft.IsStanding,
+            Color = ProjectCodes.NormalizeColor(draft.Color),
             CreatedAt = now,
             UpdatedAt = now
         };
@@ -103,6 +104,7 @@ public sealed class ProjectService(IDbContextFactory<LtfiDbContext> contextFacto
         project.DoneCondition = Normalize(draft.DoneCondition);
         project.TargetDate = draft.TargetDate;
         project.IsStanding = draft.IsStanding;
+        project.Color = ProjectCodes.NormalizeColor(draft.Color);
         project.UpdatedAt = DateTimeOffset.Now;
         ApplyArchiveState(project);
 

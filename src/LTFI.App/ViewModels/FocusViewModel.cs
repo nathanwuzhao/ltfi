@@ -233,6 +233,7 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
         _hasPendingPrefill = false;
 
         var projects = await _projectService.GetAllAsync();
+        ProjectBrushes.Remember(projects);
         var tasks = await _taskService.GetAllAsync();
 
         _syncingPicker = true;

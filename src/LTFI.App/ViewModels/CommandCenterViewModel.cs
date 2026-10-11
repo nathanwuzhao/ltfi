@@ -279,6 +279,7 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
     public async Task RefreshAsync()
     {
         var projects = await _projectService.GetAllAsync();
+        ProjectBrushes.Remember(projects);
         _projectTitles.Clear();
         _standingProjects.Clear();
         foreach (var p in projects)

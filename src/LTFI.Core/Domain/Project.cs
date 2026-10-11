@@ -41,6 +41,12 @@ public class Project
     /// </summary>
     public bool IsStanding { get; set; }
 
+    /// <summary>
+    /// The colour picked in the Projects editor (<c>#RRGGBB</c>, one of <see cref="ProjectCodes.Swatches"/>);
+    /// null = automatic (<see cref="ProjectCodes.ColorFor(Guid, bool, string?)"/>).
+    /// </summary>
+    public string? Color { get; set; }
+
     public ICollection<TaskItem> Tasks { get; set; } = new List<TaskItem>();
 
     public ICollection<Milestone> Milestones { get; set; } = new List<Milestone>();

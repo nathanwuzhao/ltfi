@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LTFI.Core.Abstractions;
@@ -29,6 +30,28 @@ public partial class AreaRowViewModel : ObservableObject
     private string editName;
 }
 
+/// <summary>One colour in the editor's picker; <see cref="Hex"/> null is "automatic".</summary>
+public partial class ColorSwatchViewModel : ObservableObject
+{
+    public ColorSwatchViewModel(string? hex, IBrush brush, string tip)
+    {
+        Hex = hex;
+        Brush = brush;
+        Tip = tip;
+    }
+
+    public string? Hex { get; }
+
+    public IBrush Brush { get; }
+
+    public string Tip { get; }
+
+    public bool IsAuto => Hex is null;
+
+    [ObservableProperty]
+    private bool isSelected;
+}
+
 /// <summary>Create, view, edit, and delete projects (Phase 1 acceptance), with milestones and areas.</summary>
 public partial class ProjectsViewModel : ViewModelBase, IRefreshable
 {
@@ -50,6 +73,9 @@ public partial class ProjectsViewModel : ViewModelBase, IRefreshable
     public ObservableCollection<Milestone> Milestones { get; } = [];
 
     public ObservableCollection<AreaRowViewModel> Areas { get; } = [];
+
+    /// <summary>The colour picker: "auto" first, then <see cref="ProjectCodes.Swatches"/>.</summary>
+    public ObservableCollection<ColorSwatchViewModel> ColorSwatches { get; } = [];
 
     public Array Statuses { get; } = Enum.GetValues<ProjectStatus>();
 
@@ -107,12 +133,56 @@ public partial class ProjectsViewModel : ViewModelBase, IRefreshable
     [ObservableProperty]
     private string feedbackMessage = string.Empty;
 
+    /// <summary>The picked colour (<c>#RRGGBB</c>); null = automatic.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DraftBrush))]
+    private string? draftColor;
+
+    /// <summary>The colour the project will have once saved — previews the picker choice.</summary>
+    public IBrush DraftBrush => ProjectBrushes.For(
+        ProjectCodes.ColorFor(SelectedProject?.Id ?? Guid.Empty, DraftIsStanding, DraftColor));
+
     public ProjectsViewModel(IProjectService projectService, IMilestoneService milestoneService, IAreaService areaService)
     {
         _projectService = projectService;
         _milestoneService = milestoneService;
         _areaService = areaService;
         BeginNewProject();
+    }
+
+    partial void OnDraftColorChanged(string? value) => BuildSwatches();
+
+    partial void OnDraftIsStandingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(DraftBrush));
+        BuildSwatches();
+    }
+
+    /// <summary>Rebuilds the picker; "auto" shows the colour the project gets without a pick.</summary>
+    private void BuildSwatches()
+    {
+        var auto = ProjectCodes.ColorFor(SelectedProject?.Id ?? Guid.Empty, DraftIsStanding);
+        ColorSwatches.Clear();
+        ColorSwatches.Add(new ColorSwatchViewModel(null, ProjectBrushes.For(auto), "Automatic")
+        {
+            IsSelected = DraftColor is null
+        });
+        foreach (var hex in ProjectCodes.Swatches)
+        {
+            ColorSwatches.Add(new ColorSwatchViewModel(hex, ProjectBrushes.For(hex), hex)
+            {
+                IsSelected = string.Equals(hex, DraftColor, StringComparison.OrdinalIgnoreCase)
+            });
+        }
+    }
+
+    [RelayCommand]
+    private void PickColor(ColorSwatchViewModel? swatch)
+    {
+        if (swatch is not null)
+        {
+            DraftColor = swatch.Hex;
+        }
     }
 
     public string EditorTitle => IsCreatingNew ? "New Project" : "Edit Project";
@@ -127,6 +197,7 @@ public partial class ProjectsViewModel : ViewModelBase, IRefreshable
     public async Task RefreshAsync()
     {
         var projects = await _projectService.GetAllAsync();
+        ProjectBrushes.Remember(projects);
         _allProjects.Clear();
         _allProjects.AddRange(projects);
         ApplyFilter();
@@ -243,7 +314,8 @@ public partial class ProjectsViewModel : ViewModelBase, IRefreshable
                 Status = status,
                 DoneCondition = project.DoneCondition,
                 TargetDate = project.TargetDate,
-                IsStanding = project.IsStanding
+                IsStanding = project.IsStanding,
+                Color = project.Color
             });
         }
         catch (Exception ex)
@@ -438,6 +510,8 @@ public partial class ProjectsViewModel : ViewModelBase, IRefreshable
         NewMilestoneTitle = string.Empty;
         NewAreaName = string.Empty;
         DraftIsStanding = false;
+        DraftColor = null;
+        BuildSwatches();
         FeedbackMessage = string.Empty;
         Milestones.Clear();
         Areas.Clear();
@@ -451,6 +525,9 @@ public partial class ProjectsViewModel : ViewModelBase, IRefreshable
         NewMilestoneTitle = string.Empty;
         NewAreaName = string.Empty;
         DraftIsStanding = project.IsStanding;
+        DraftColor = ProjectCodes.NormalizeColor(project.Color);
+        BuildSwatches();
+        OnPropertyChanged(nameof(DraftBrush));
         _ = LoadMilestonesAsync(project.Id);
         _ = LoadAreasAsync(project.Id);
         SelectedStatus = project.Status;
@@ -488,7 +565,8 @@ public partial class ProjectsViewModel : ViewModelBase, IRefreshable
             Status = SelectedStatus,
             DoneCondition = DraftDoneCondition,
             TargetDate = targetDate,
-            IsStanding = DraftIsStanding
+            IsStanding = DraftIsStanding,
+            Color = DraftColor
         };
 
         return true;

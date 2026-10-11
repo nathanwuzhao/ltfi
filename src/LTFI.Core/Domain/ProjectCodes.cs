@@ -48,21 +48,51 @@ public static class ProjectCodes
     }
 
     /// <summary>
-    /// A project's colour: <see cref="StandingColor"/> for a standing project, otherwise a palette
-    /// entry picked by a fixed hash (FNV-1a) of its id — stable across runs and machines.
+    /// The colours offered in the Projects editor's picker: the automatic palette plus a few more,
+    /// all far enough apart to tell projects apart at a glance.
     /// </summary>
-    public static string ColorFor(Guid projectId, bool isStanding = false) =>
-        isStanding ? StandingColor : Palette[PaletteIndex(projectId)];
+    public static IReadOnlyList<string> Swatches { get; } =
+    [
+        .. Palette,
+        "#E39A7B", // coral
+        "#A3C47E", // moss
+        "#E2C46F", // gold
+        "#E58FD0", // orchid
+        StandingColor
+    ];
+
+    /// <summary>
+    /// A picked colour as stored: <c>#RRGGBB</c> uppercased, or null (automatic) for empty or
+    /// anything that isn't a 6-digit hex colour.
+    /// </summary>
+    public static string? NormalizeColor(string? color)
+    {
+        if (string.IsNullOrWhiteSpace(color))
+        {
+            return null;
+        }
+
+        var hex = color.Trim().TrimStart('#');
+        return hex.Length == 6 && hex.All(Uri.IsHexDigit) ? "#" + hex.ToUpperInvariant() : null;
+    }
+
+    /// <summary>
+    /// A project's colour: the picked <paramref name="custom"/> colour when there is one; otherwise
+    /// <see cref="StandingColor"/> for a standing project, else a palette entry picked by a fixed
+    /// hash (FNV-1a) of its id — stable across runs and machines.
+    /// </summary>
+    public static string ColorFor(Guid projectId, bool isStanding = false, string? custom = null) =>
+        NormalizeColor(custom) ?? (isStanding ? StandingColor : Palette[PaletteIndex(projectId)]);
 
     /// <summary>No project at all (e.g. "(No project)", evidence without one): the faint text colour.</summary>
     public const string NoneColor = "#5B636F";
 
     /// <summary>
-    /// <see cref="ColorFor(Guid, bool)"/> for an optional project: <see cref="NoneColor"/> when there is none.
+    /// <see cref="ColorFor(Guid, bool, string?)"/> for an optional project: <see cref="NoneColor"/> when there is none.
     /// The single rule every screen's project colour goes through.
     /// </summary>
-    public static string ColorOrNone(Guid? projectId, bool isStanding = false) =>
-        projectId is { } id ? ColorFor(id, isStanding) : NoneColor;
+    public static string ColorOrNone(Guid? projectId, bool isStanding = false, string? custom = null) =>
+        projectId is { } id ? ColorFor(id, isStanding, custom) : NoneColor;
 
     /// <summary>The palette slot for <paramref name="projectId"/>.</summary>
     public static int PaletteIndex(Guid projectId)

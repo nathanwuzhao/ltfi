@@ -215,6 +215,7 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
         var selectedId = SelectedTask?.Id;
 
         var projects = await _projectService.GetAllAsync();
+        ProjectBrushes.Remember(projects);
         _suppressProjectChange = true;
         ProjectOptions.Clear();
         ProjectOptions.Add(new ProjectOption(null, "(No project)"));

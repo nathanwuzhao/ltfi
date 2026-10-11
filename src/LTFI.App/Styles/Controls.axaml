@@ -214,6 +214,31 @@
         <Setter Property="Foreground" Value="{DynamicResource TextBodyBrush}"/>
     </Style>
 
+    <!-- Project colour swatch (Projects editor): a round dot; .selected gets a white ring -->
+    <Style Selector="Button.swatch">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Margin" Value="0,0,6,6"/>
+        <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style Selector="Button.swatch:pointerover /template/ ContentPresenter, Button.swatch:pressed /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="Button.swatch Border.dot">
+        <Setter Property="Width" Value="26"/>
+        <Setter Property="Height" Value="26"/>
+        <Setter Property="CornerRadius" Value="13"/>
+        <Setter Property="BorderThickness" Value="2"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+    </Style>
+    <Style Selector="Button.swatch:pointerover Border.dot">
+        <Setter Property="BorderBrush" Value="#5B636F"/>
+    </Style>
+    <Style Selector="Button.swatch.selected Border.dot">
+        <Setter Property="BorderBrush" Value="#E6EAF0"/>
+    </Style>
+
     <!-- Segmented option buttons: add .selected to the chosen one (stays green) -->
     <Style Selector="Button.seg">
         <Setter Property="Background" Value="#12181F"/>

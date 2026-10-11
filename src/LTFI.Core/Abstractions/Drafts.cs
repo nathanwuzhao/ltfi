@@ -14,6 +14,9 @@ public sealed record ProjectDraft
 
     /// <summary>A standing project (e.g. "Life") is exempt from the active-project limit.</summary>
     public bool IsStanding { get; init; }
+
+    /// <summary>Picked colour (<c>#RRGGBB</c>); null = automatic.</summary>
+    public string? Color { get; init; }
 }
 
 /// <summary>Input for creating or updating a <see cref="TaskItem"/>.</summary>
