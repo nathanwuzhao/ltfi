@@ -101,7 +101,8 @@ public sealed class ReflectionService(
 
         // A revision: commitments an earlier check-in for this same reviewed week made that are
         // still in the form are updated in place (re-pointed at this check-in), so a Kept one stays
-        // Kept and nothing is duplicated. The rest are new rows.
+        // Kept and nothing is duplicated. The rest are new rows. A Kept row's text is fixed: a draft
+        // that renames it becomes a new commitment instead of inheriting the kept status.
         var week = WeeklyCheckIn.CommitmentWeekFor(reviewed);
         var prior = await db.Commitments
             .Where(c => c.WeekStart == week && (c.Status == CommitmentStatus.Open || c.Status == CommitmentStatus.Kept))
@@ -110,9 +111,15 @@ public sealed class ReflectionService(
         var reused = new HashSet<Guid>();
         for (var i = 0; i < cleaned.Count; i++)
         {
-            if (matches[i] is { } id)
+            var row = matches[i] is { } id ? prior.First(c => c.Id == id) : null;
+            if (row is { Status: CommitmentStatus.Kept }
+                && !string.Equals(row.Text.Trim(), cleaned[i].Text?.Trim(), StringComparison.OrdinalIgnoreCase))
             {
-                var row = prior.First(c => c.Id == id);
+                row = null;
+            }
+
+            if (row is not null)
+            {
                 row.CheckInId = entry.Id;
                 row.Text = cleaned[i].Text;
                 row.SortOrder = i;
@@ -121,12 +128,21 @@ public sealed class ReflectionService(
                 {
                     row.LinkedTaskId = cleaned[i].LinkedTaskId; // a Kept one keeps the link that kept it
                 }
-                reused.Add(id);
+                reused.Add(row.Id);
             }
             else
             {
                 CommitmentService.AddCommitment(db, entry, week, cleaned[i], i);
             }
+        }
+
+        // A Kept row the revision left out can't be un-kept (its evidence and points stand), so it
+        // moves to this check-in too: it stays in the revise form and counts toward the week.
+        var keptOrder = cleaned.Count;
+        foreach (var row in prior.Where(c => c.Status == CommitmentStatus.Kept && !reused.Contains(c.Id)))
+        {
+            row.CheckInId = entry.Id;
+            row.SortOrder = keptOrder++; // its older CreatedAt still lists it first
         }
 
         // Settle the commitments still open: those that applied to the reviewed week or earlier →

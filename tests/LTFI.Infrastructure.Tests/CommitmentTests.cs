@@ -366,6 +366,41 @@ public sealed class CommitmentTests : IDisposable
         Assert.Equal(["A", "B, but smaller", "D"], (await reflections.GetRevisionAsync())!.Commitments.Select(c => c.Text));
     }
 
+    [Fact]
+    public async Task Revising_never_renames_or_loses_a_kept_commitment()
+    {
+        var reflections = NewReflections();
+        var commitments = NewCommitments();
+        await reflections.SaveWeeklyCheckInAsync(Answers(),
+            [new CommitmentDraft("A"), new CommitmentDraft("B")]);
+        var first = await PanelAsync(commitments);
+        await commitments.KeepAsync(first[0].Id);
+
+        // Sunday: revise once with A's text replaced (by its id), then once with A left out.
+        _clock.Now = Saturday.AddDays(1).AddHours(5);
+        var prefill = (await reflections.GetRevisionAsync())!;
+        await reflections.SaveWeeklyCheckInAsync(Answers(),
+        [
+            new CommitmentDraft("Something new", ExistingId: prefill.Commitments[0].Id),
+            new CommitmentDraft("B", ExistingId: prefill.Commitments[1].Id)
+        ]);
+
+        var lines = await PanelAsync(commitments);
+        var kept = Assert.Single(lines, l => l.Id == first[0].Id);
+        Assert.Equal("A", kept.Text);
+        Assert.Equal(CommitmentStatus.Kept, kept.Status);
+        Assert.Equal(CommitmentStatus.Open, Assert.Single(lines, l => l.Text == "Something new").Status);
+
+        _clock.Now = _clock.Now.AddMinutes(5);
+        var revised = await reflections.SaveWeeklyCheckInAsync(Answers(), [new CommitmentDraft("B")]);
+
+        // A stays with the latest check-in, so the revise form still shows it.
+        var revision = (await reflections.GetRevisionAsync())!;
+        Assert.Contains(revision.Commitments, c => c.Id == first[0].Id && c.IsKept && c.CheckInId == revised.Id);
+        Assert.Equal(["A", "B"], (await PanelAsync(commitments)).Select(c => c.Text));
+        Assert.Single(await KeptEvidenceAsync());
+    }
+
     // ---------------------------------------------------------------- backfill
 
     [Fact]

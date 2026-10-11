@@ -235,7 +235,8 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
     {
         if (row.CanOpen)
         {
-            _signals.RequestOpenItem(new OpenItemRequest(row.TaskId, row.ProjectId, startFocus));
+            // A row that can't be focused (a kept commitment's closed task) just opens in Tasks.
+            _signals.RequestOpenItem(new OpenItemRequest(row.TaskId, row.ProjectId, startFocus && row.CanFocus));
         }
     }
 
@@ -882,6 +883,9 @@ public interface IOpenableRow
     Guid? TaskId { get; }
     Guid? ProjectId { get; }
     bool CanOpen { get; }
+
+    /// <summary>Ctrl+click can pre-fill Focus (Focus only offers open tasks).</summary>
+    bool CanFocus { get; }
 }
 
 /// <summary>Tooltips for clickable Command Center rows.</summary>
@@ -889,6 +893,7 @@ internal static class OpenRowTip
 {
     public const string Task = "Click: open in Tasks · Ctrl+click: start focus";
     public const string Project = "Click: open in Projects · Ctrl+click: start focus";
+    public const string TaskOnly = "Click: open in Tasks";
 }
 
 public sealed class DeadlineRow : IOpenableRow
@@ -906,6 +911,7 @@ public sealed class DeadlineRow : IOpenableRow
     public Guid? ProjectId { get; init; }
 
     public bool CanOpen => TaskId is not null || ProjectId is not null;
+    public bool CanFocus => CanOpen;
     public string? OpenTip => !CanOpen ? null : TaskId is null ? OpenRowTip.Project : OpenRowTip.Task;
 }
 
@@ -956,10 +962,13 @@ public sealed class CommitRow(Guid id) : IOpenableRow
     public Guid? ProjectId { get; init; }
 
     public bool CanOpen => TaskId is not null;
-    public string? OpenTip => CanOpen ? OpenRowTip.Task : null;
+
+    /// <summary>A kept commitment's reminder is completed, so Focus has nothing to pre-fill.</summary>
+    public bool CanFocus => CanOpen && !IsKept;
+    public string? OpenTip => !CanOpen ? null : CanFocus ? OpenRowTip.Task : OpenRowTip.TaskOnly;
 
     /// <summary>The (possibly trimmed) text's tooltip; a clickable row also says what a click does.</summary>
-    public string TextTip => CanOpen ? $"{Text}\n{OpenRowTip.Task}" : Text;
+    public string TextTip => OpenTip is { } tip ? $"{Text}\n{tip}" : Text;
 }
 
 public sealed class HeatCell

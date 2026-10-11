@@ -125,13 +125,14 @@
                                     <DataTemplate x:DataType="vm:CommitmentInput">
                                         <Grid ColumnDefinitions="18,*,Auto,8,240" Margin="0,0,0,5">
                                             <TextBlock Classes="num dim" FontSize="10.5" VerticalAlignment="Center" Text="{Binding Number}"/>
-                                            <TextBox Grid.Column="1" FontSize="11.5" Text="{Binding Text, Mode=TwoWay}"
+                                            <TextBox Grid.Column="1" FontSize="11.5" Text="{Binding Text, Mode=TwoWay}" IsReadOnly="{Binding IsKept}"
                                                      PlaceholderText="commitment — with a first step under 10 minutes"/>
                                             <TextBlock Grid.Column="2" Margin="8,0,0,0" FontSize="10" FontWeight="SemiBold" LetterSpacing="0.6"
                                                        VerticalAlignment="Center" Foreground="{DynamicResource SuccessBrush}" Text="✓ KEPT"
                                                        IsVisible="{Binding IsKept}"
-                                                       ToolTip.Tip="Already kept — revising leaves it kept"/>
+                                                       ToolTip.Tip="Already kept — it can't be edited or removed when revising"/>
                                             <ComboBox Grid.Column="4" FontSize="10.5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                                      IsEnabled="{Binding !IsKept}"
                                                       ItemsSource="{Binding LinkOptions}" SelectedItem="{Binding SelectedLink, Mode=TwoWay}"
                                                       ToolTip.Tip="Link to an open reminder: completing it keeps this commitment automatically">
                                                 <ComboBox.ItemTemplate>

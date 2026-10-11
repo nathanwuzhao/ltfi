@@ -258,11 +258,13 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
     /// </summary>
     public async Task RefreshListAsync()
     {
-        var selectedId = SelectedTask?.Id;
         var tasks = await _taskService.GetAllAsync();
         _allTasks.Clear();
         _allTasks.AddRange(tasks);
 
+        // Read after the await: the user (or a navigation's ShowTask) may have picked another task
+        // meanwhile, and restoring the stale one would leave it selected with the other's editor.
+        var selectedId = SelectedTask?.Id;
         _suppressSelectionLoad = true;
         try
         {
