@@ -55,6 +55,13 @@ public sealed record WeeklyCheckInStatus(
     public bool IsRevision => Phase == CheckInPhase.Done && CanSubmit;
 }
 
+/// <summary>
+/// The check-in a revision edits: the latest one, still inside its reviewed week's window, with the
+/// commitments it made (Dropped excluded, in order). Empty <see cref="Commitments"/> for a v1
+/// free-text check-in; split its Q5 answer instead.
+/// </summary>
+public sealed record WeeklyCheckInRevision(WeeklyCheckInRecord CheckIn, IReadOnlyList<CommitmentLine> Commitments);
+
 /// <summary>Persists the check-in snooze state outside the database (no migration needed).</summary>
 public interface ICheckInSnoozeStore
 {
@@ -81,7 +88,9 @@ public interface IReflectionService
     /// <summary>
     /// Saves a weekly check-in with structured commitments (1–3 non-empty, each optionally linked to
     /// an open task). Q5 in <paramref name="answers"/> is replaced by the commitments joined as text,
-    /// for history. The new commitments apply to the week after the reviewed one.
+    /// for history. The new commitments apply to the week after the reviewed one. On a revision, a
+    /// commitment matching one the earlier check-in made (<see cref="WeeklyCommitments.MatchRevision"/>)
+    /// updates that row in place, keeping its status (a Kept one stays Kept, no new evidence).
     /// <paramref name="resolutions"/> settles the Open commitments that applied to the reviewed week
     /// or earlier (Kept / Missed); any of those not listed becomes Missed. Open commitments from an
     /// earlier check-in for the same reviewed week are Dropped (superseded).
@@ -93,6 +102,12 @@ public interface IReflectionService
         CancellationToken cancellationToken = default);
 
     Task<WeeklyCheckInRecord?> GetLatestWeeklyCheckInAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// What the form should be prefilled with while it revises (<see cref="WeeklyCheckInStatus.IsRevision"/>):
+    /// the latest check-in's answers and commitments. Null when there is nothing to revise.
+    /// </summary>
+    Task<WeeklyCheckInRevision?> GetRevisionAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Most recent check-ins first, capped at <paramref name="limit"/>.</summary>
     Task<IReadOnlyList<WeeklyCheckInRecord>> GetWeeklyCheckInHistoryAsync(
