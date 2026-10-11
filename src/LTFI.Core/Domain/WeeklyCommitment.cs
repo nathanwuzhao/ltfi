@@ -17,7 +17,7 @@ public enum CommitmentStatus
     /// <summary>Not kept by the next check-in (also the fate of a carried-over commitment's old row).</summary>
     Missed,
 
-    /// <summary>Superseded by a re-submitted check-in in the same week.</summary>
+    /// <summary>Superseded by a re-submitted check-in for the same reviewed week.</summary>
     Dropped
 }
 
@@ -32,7 +32,12 @@ public class WeeklyCommitment
     /// <summary>The check-in (<see cref="ReflectionEntry"/>) that made this commitment.</summary>
     public Guid CheckInId { get; set; }
 
-    /// <summary>The check-in week this commitment belongs to (<see cref="WeeklyCheckIn.WeekStart"/>'s date).</summary>
+    /// <summary>
+    /// Monday of the Mon–Sun week this commitment <em>applies to</em>: the week after the one its
+    /// check-in reviewed (<see cref="WeeklyCommitments.WeekFor"/>). Rows written before 2026-10-11
+    /// held the old Sunday-start check-in week; any non-Monday value is legacy and is re-derived
+    /// from the check-in's time (<see cref="WeeklyCommitments.IsLegacyWeekStart"/>).
+    /// </summary>
     public DateOnly WeekStart { get; set; }
 
     public string Text { get; set; } = string.Empty;
@@ -60,9 +65,18 @@ public static class WeeklyCommitments
 
     private static readonly Regex Bullet = new(@"^\s*(?:\d+[.)](?!\d)|[•·*]|[-–—](?=\s))\s*", RegexOptions.Compiled);
 
-    /// <summary>The check-in week (as a date) that <paramref name="at"/> falls in.</summary>
-    public static DateOnly WeekOf(DateTimeOffset at) =>
-        DateOnly.FromDateTime(WeeklyCheckIn.WeekStart(at).DateTime);
+    /// <summary>
+    /// The week (its Monday) that commitments made in a check-in saved at <paramref name="checkInAt"/>
+    /// (local time) apply to: the week after the one that check-in reviews.
+    /// </summary>
+    public static DateOnly WeekFor(DateTimeOffset checkInAt, CheckInSchedule schedule) =>
+        WeeklyCheckIn.CommitmentWeekFor(WeeklyCheckIn.ReviewedWeekOf(checkInAt, schedule));
+
+    /// <summary>
+    /// True for a <see cref="WeeklyCommitment.WeekStart"/> written by the old model (a Sunday-start
+    /// check-in week). New values are always Mondays, so re-deriving is idempotent.
+    /// </summary>
+    public static bool IsLegacyWeekStart(DateOnly weekStart) => weekStart.DayOfWeek != DayOfWeek.Monday;
 
     /// <summary>
     /// Splits a free-text Q5 answer (v1 check-ins) into commitments: one per line, with list markers

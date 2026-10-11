@@ -13,18 +13,25 @@ namespace LTFI.Infrastructure.Services;
 /// <summary>
 /// Persistence-backed <see cref="IReflectionService"/>. Weekly check-ins are <see cref="ReflectionEntry"/>
 /// rows with <see cref="ReflectionScope.Week"/> and <see cref="WeeklyCheckIn.PromptVersion"/>; ordering
-/// runs in memory because SQLite can't ORDER BY a DateTimeOffset. The clock is injectable for tests.
+/// runs in memory because SQLite can't ORDER BY a DateTimeOffset. The week a check-in reviews is
+/// never stored: it is derived from <see cref="ReflectionEntry.CreatedAt"/> (converted to the local
+/// zone) by <see cref="WeeklyCheckIn.ReviewedWeekOf"/> and the configured <see cref="CheckInSchedule"/>.
+/// The clock (and so the local zone) is injectable for tests.
 /// </summary>
 public sealed class ReflectionService(
     IDbContextFactory<LtfiDbContext> contextFactory,
     ICheckInSnoozeStore snoozeStore,
-    TimeProvider? clock = null) : IReflectionService
+    TimeProvider? clock = null,
+    CheckInSchedule? schedule = null) : IReflectionService
 {
     private readonly IDbContextFactory<LtfiDbContext> _contextFactory = contextFactory;
     private readonly ICheckInSnoozeStore _snoozeStore = snoozeStore;
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
+    private readonly CheckInSchedule _schedule = schedule ?? CheckInSchedule.Default;
 
     private DateTimeOffset Now => _clock.GetLocalNow();
+
+    private TimeZoneInfo Zone => _clock.LocalTimeZone;
 
     public Task<WeeklyCheckInRecord> SaveWeeklyCheckInAsync(
         IReadOnlyList<string?> answers, CancellationToken cancellationToken = default)
@@ -62,15 +69,17 @@ public sealed class ReflectionService(
         CancellationToken cancellationToken)
     {
         var now = Now;
+        var reviewed = WeeklyCheckIn.ReviewedWeekOf(now, _schedule);
 
         await using var db = await _contextFactory.CreateDbContextAsync(cancellationToken);
 
-        // Only the first check-in of a week earns evidence/points, so re-submitting can't farm them.
-        var lastBefore = await GetLatestCreatedAtAsync(db, cancellationToken);
-        var firstThisWeek = WeeklyCheckIn.IsDue(lastBefore, now);
+        // Only the first check-in for a reviewed week earns evidence/points, so re-submitting can't farm them.
+        var earlier = await WeeklyEntries(db).Select(r => r.CreatedAt).ToListAsync(cancellationToken);
+        var firstForWeek = !earlier.Any(t => WeeklyCheckIn.ReviewedWeekOf(ToLocal(t, Zone), _schedule) == reviewed);
 
-        // Linked tasks completed since the last read count as kept before anything is settled.
-        await CommitmentService.ReconcileAsync(db, cancellationToken);
+        // Legacy week values are re-derived and linked tasks completed since the last read count as
+        // kept, before anything is settled.
+        await CommitmentService.ReconcileAsync(db, _schedule, Zone, cancellationToken);
 
         var entry = new ReflectionEntry
         {
@@ -86,19 +95,19 @@ public sealed class ReflectionService(
         var existing = linkIds.Count == 0
             ? new HashSet<Guid>()
             : (await db.Tasks.Where(t => linkIds.Contains(t.Id)).Select(t => t.Id).ToListAsync(cancellationToken)).ToHashSet();
-        CommitmentService.AddCommitments(db, entry, drafts
+        CommitmentService.AddCommitments(db, entry, WeeklyCheckIn.CommitmentWeekFor(reviewed), drafts
             .Select(d => d.LinkedTaskId is { } id && !existing.Contains(id) ? d with { LinkedTaskId = null } : d)
             .ToList());
 
-        // Settle the commitments still open: earlier weeks → Kept (if chosen) or Missed; an earlier
-        // check-in this same week → Dropped (superseded by this one).
-        var week = WeeklyCommitments.WeekOf(now);
+        // Settle the commitments still open: those that applied to the reviewed week or earlier →
+        // Kept (if chosen) or Missed; those made by an earlier check-in for this same reviewed week
+        // (they apply to next week) → Dropped, superseded by this one.
         var open = await db.Commitments
             .Where(c => c.Status == CommitmentStatus.Open)
             .ToListAsync(cancellationToken);
         foreach (var c in open.Where(c => c.CheckInId != entry.Id))
         {
-            if (c.WeekStart >= week)
+            if (c.WeekStart > reviewed)
             {
                 c.Status = CommitmentStatus.Dropped;
                 c.ResolvedAt = now;
@@ -119,7 +128,7 @@ public sealed class ReflectionService(
             }
         }
 
-        if (firstThisWeek)
+        if (firstForWeek)
         {
             db.Evidence.Add(new EvidenceItem
             {
@@ -154,47 +163,58 @@ public sealed class ReflectionService(
     public async Task<WeeklyCheckInStatus> GetWeeklyCheckInStatusAsync(CancellationToken cancellationToken = default)
     {
         await using var db = await _contextFactory.CreateDbContextAsync(cancellationToken);
-        var last = await GetLatestCreatedAtAsync(db, cancellationToken);
+        var last = await GetLatestLocalAsync(db, Zone, cancellationToken);
         return BuildStatus(last, _snoozeStore.Load(), Now);
     }
 
     public async Task<WeeklyCheckInStatus> SnoozeWeeklyCheckInAsync(CancellationToken cancellationToken = default)
     {
         await using var db = await _contextFactory.CreateDbContextAsync(cancellationToken);
-        var last = await GetLatestCreatedAtAsync(db, cancellationToken);
+        var last = await GetLatestLocalAsync(db, Zone, cancellationToken);
         var now = Now;
 
-        var next = WeeklyCheckIn.Snooze(_snoozeStore.Load(), last, now);
+        var next = WeeklyCheckIn.Snooze(_snoozeStore.Load(), last, now, _schedule);
         _snoozeStore.Save(next);
         return BuildStatus(last, next, now);
     }
 
-    private static WeeklyCheckInStatus BuildStatus(DateTimeOffset? last, CheckInSnoozeState? snooze, DateTimeOffset now)
+    private WeeklyCheckInStatus BuildStatus(DateTimeOffset? last, CheckInSnoozeState? snooze, DateTimeOffset now)
     {
-        var snoozed = WeeklyCheckIn.IsSnoozed(snooze, now);
+        var state = WeeklyCheckIn.Evaluate(last, now, _schedule);
+        var snoozed = WeeklyCheckIn.IsSnoozed(snooze, now, _schedule);
         return new WeeklyCheckInStatus(
-            IsDue: WeeklyCheckIn.IsDue(last, now),
+            Phase: state.Phase,
+            ReviewWeek: state.ReviewWeek,
             IsSnoozed: snoozed,
             SnoozedUntil: snoozed ? snooze!.Until : null,
-            SnoozesRemaining: WeeklyCheckIn.SnoozesRemaining(snooze, now),
+            SnoozesRemaining: WeeklyCheckIn.SnoozesRemaining(snooze, now, _schedule),
+            SnoozeHours: _schedule.SnoozeHours,
             LastCheckInAt: last,
-            NextDueAt: WeeklyCheckIn.WeekStart(now).AddDays(7));
+            OpensAt: state.OpensAt,
+            GateAt: state.GateAt,
+            DueAt: state.DueAt,
+            NextOpensAt: state.NextOpensAt,
+            CanSubmit: state.CanSubmit);
     }
 
-    private static IQueryable<ReflectionEntry> WeeklyEntries(LtfiDbContext db) =>
+    internal static IQueryable<ReflectionEntry> WeeklyEntries(LtfiDbContext db) =>
         db.Reflections.AsNoTracking()
             .Where(r => r.ScopeType == ReflectionScope.Week && r.Prompt == WeeklyCheckIn.PromptVersion);
 
-    private static async Task<DateTimeOffset?> GetLatestCreatedAtAsync(LtfiDbContext db, CancellationToken cancellationToken)
+    /// <summary>A stored time on the local wall clock (week math is wall-clock based).</summary>
+    internal static DateTimeOffset ToLocal(DateTimeOffset at, TimeZoneInfo zone) => TimeZoneInfo.ConvertTime(at, zone);
+
+    /// <summary>The most recent weekly check-in's time, in the local zone; null when there is none.</summary>
+    internal static async Task<DateTimeOffset?> GetLatestLocalAsync(LtfiDbContext db, TimeZoneInfo zone, CancellationToken cancellationToken)
     {
         var times = await WeeklyEntries(db).Select(r => r.CreatedAt).ToListAsync(cancellationToken);
-        return times.Count == 0 ? null : times.Max();
+        return times.Count == 0 ? null : ToLocal(times.Max(), zone);
     }
 
-    /// <summary>True when a weekly check-in was saved at or after <paramref name="since"/>.</summary>
-    internal static async Task<bool> HasCheckInSinceAsync(LtfiDbContext db, DateTimeOffset since, CancellationToken cancellationToken) =>
-        await GetLatestCreatedAtAsync(db, cancellationToken) is { } last && last >= since;
-
-    private static WeeklyCheckInRecord ToRecord(ReflectionEntry entry) =>
-        new(entry.Id, entry.CreatedAt, WeeklyCheckIn.Deserialize(entry.Body));
+    private WeeklyCheckInRecord ToRecord(ReflectionEntry entry)
+    {
+        var local = ToLocal(entry.CreatedAt, Zone);
+        return new(entry.Id, entry.CreatedAt, WeeklyCheckIn.Deserialize(entry.Body),
+            WeeklyCheckIn.ReviewedWeekOf(local, _schedule), WeeklyCheckIn.IsLate(local, _schedule));
+    }
 }

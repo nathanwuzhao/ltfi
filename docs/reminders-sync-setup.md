@@ -158,7 +158,8 @@ Shortcuts app → **+** → name it **LTFI Apply**.
             - Due date: **If** `dueDate` *has any value* → **Get Dates from Input** (`dueDate`)
               → set it as the reminder's Due Date (use **Edit Reminder → Due Date** on the new
               reminder if *Add New Reminder* won't take a variable date). `dueDate` is always
-              full ISO 8601 with offset (`2026-10-10T00:00:00-04:00`); midnight means "that day".
+              full ISO 8601 with offset and always **23:59 local** (`2026-10-10T23:59:00-04:00`):
+              LTFI treats due as a date, and 23:59 means "that day" (midnight was stored as 12:00 PM).
          3. **End If** (already exists → nothing to do).
    4. **Otherwise, If** `Op` *is* `complete`:
       1. **If** `Match` **has any value** → **Edit Reminder** `Match` → set **Is Completed** to
@@ -167,7 +168,8 @@ Shortcuts app → **+** → name it **LTFI Apply**.
       1. **If** `Match` **has any value**:
          1. **Get Dictionary Value** `dueDate` from the *Repeat Item* → Set Variable `NewDue`.
          2. **Get Dates from Input** (`NewDue`) → Set Variable `NewDueDate`. (`dueDate` is always
-            full ISO 8601 with offset, e.g. `2026-10-11T00:00:00-04:00`; midnight means "that day".)
+            full ISO 8601 with offset and always 23:59 local, e.g. `2026-10-11T23:59:00-04:00`:
+            the date is what matters; 23:59 means "by the end of that day".)
          3. **Edit Reminder** `Match` → **Due Date** → `NewDueDate`.
       2. **End If**. (Not there? Nothing to do; LTFI keeps listing it until an export shows the date.)
    6. **End If** (closes the create / complete / update chain — the Shortcuts editor adds one
@@ -185,12 +187,14 @@ Field notes:
     "writtenAt": "2026-10-04T18:20:00-04:00",
     "commands": [
       { "op": "create", "url": "ltfi://r/3f2c…e1", "title": "Order filament", "notes": "",
-        "list": "LTFI", "dueDate": "2026-10-10T00:00:00-04:00", "priority": "None" },
+        "list": "LTFI", "dueDate": "2026-10-10T23:59:00-04:00", "priority": "None" },
       { "op": "complete", "url": "ltfi://r/20261001090000-54321" },
-      { "op": "update", "url": "ltfi://r/20260928140000-11111", "dueDate": "2026-10-11T09:30:00-04:00" }
+      { "op": "update", "url": "ltfi://r/20260928140000-11111", "dueDate": "2026-10-11T23:59:00-04:00" }
     ]
   }
   ```
+- Every non-empty `dueDate` arrives as **23:59 local** (due is a date in LTFI; see "Due dates set in
+  LTFI" below), so a Shortcut that keeps the given time stores 11:59 PM, not 12:00 PM.
 - `update` carries only `dueDate` (never empty: LTFI can set a due date but not remove one). There
   is at most one pending `update` per reminder; pushing again replaces its date. For a reminder
   whose `create` is still pending, LTFI changes the create's `dueDate` instead of adding an update.
@@ -258,9 +262,12 @@ still waiting for the iPhone.
   reminder on the phone does not reopen the LTFI task.
 - **Due dates set in LTFI.** Only reminders with an `ltfi://` URL can get one (otherwise: change it on
   the phone). While the `update` is unconfirmed the task shows **PENDING** and the sync keeps LTFI's
-  date instead of the export's. It is confirmed when the export shows that due date — the same
-  instant within a minute, or the same local day when either side is midnight / date-only (all-day).
-  After that the phone owns the due date again. If the phone created a reminder from an older
+  date instead of the export's. It is confirmed when the export shows that due date on the same
+  local calendar day (whatever time the phone hands back: 23:59, 12:00, midnight or date-only).
+  After that the phone owns the due date again. **Every due date LTFI sends (create or update) is
+  that local date at 23:59** — the editor, **+1D** (old local date + 1 day at 23:59, whatever time
+  the reminder had) and new reminders alike; LTFI stores the same instant. Phone-set times are never
+  rewritten by the sync. If the phone created a reminder from an older
   `outbox.json` (iCloud lag) and so lacks a due date LTFI set meanwhile, the sync sends that date as
   an `update`.
 - **Outbox confirmation.** A `create` is confirmed when an export contains a reminder with that URL;

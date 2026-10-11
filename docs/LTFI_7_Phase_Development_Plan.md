@@ -41,7 +41,10 @@ The long-term aesthetic goal is a dense, dark, operational-intelligence-style da
    Command Center. Each day's colour is weighted by evidence points, so everything that
    produces evidence feeds it.
 3. **Structure through a weekly loop.** A mandatory weekly check-in has 6 fixed questions. It
-   gates the app from Sunday, with 2 snoozes of 3 hours each per week. An optional LLM coach
+   reviews the Mon–Sun week that is ending: the window opens Saturday 00:00, the app is gated from
+   Sunday 18:00, it is due Sunday 23:59 and overdue (gated at once) from Monday 00:00, with 2
+   snoozes of 3 hours per reviewed week. Its commitments cover the following week. All times are
+   in `settings.json` → `checkIn` (2026-10-11, see `agent-notes/2026-10-11-checkin-week-model.md`). An optional LLM coach
    (OpenAI Responses API, structured output, key stored with DPAPI) turns the week's data plus
    your answers into a coaching card. The coach only suggests; it never changes data.
 
@@ -58,13 +61,15 @@ The long-term aesthetic goal is a dense, dark, operational-intelligence-style da
 | Weekly commitments: Q5 as 3 structured rows linkable to reminders, auto-kept on completion (also via sync), Command Center checkbox, `CommitmentKept` evidence (5 pts), next-check-in review (kept / missed / carry over), v1 Q5 backfill | done (2026-10-04, migration `AddWeeklyCommitments`) — see `agent-notes/2026-10-04-commitments-graph-click.md` |
 | Graph polish: click a day → evidence feed filtered to that day | done (2026-10-04) |
 | Standing projects have no progress % (domain rule; bar/trend hidden) | done (2026-10-04) |
+| Check-in week model: reviews the ending Mon–Sun week, Sat window / Sun 18:00 gate / Sun 23:59 due / Mon overdue, header chip, commitments apply to the next week, configurable `checkIn` settings | done (2026-10-11, no schema change) — see `agent-notes/2026-10-11-checkin-week-model.md` |
 
 ### Next (in order)
 
 1. ~~**Make the check-in's commitments real (no LLM).**~~ — shipped 2026-10-04. Still waiting on
    the coach being unpaused: Accept, Edit or Drop on its suggested commitments.
 2. **Minimal Settings page:** reminders file path, `standingProject` / `ltfiList` / `listMap`
-   (list → project/area), OpenAI key and model, check-in day, and the policy constants.
+   (list → project/area), OpenAI key and model, the check-in schedule (already editable in
+   `settings.json` → `checkIn`), and the policy constants.
 3. **Honest-core cleanup:**
    - fix the crash when two projects share a title (Command Center `ToDictionary` by title)
    - rename the "NO EVIDENCE" risk to "NO OUTPUT"

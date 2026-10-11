@@ -12,7 +12,7 @@
         MinHeight="640"
         x:Class="LTFI.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Icon="/Assets/avalonia-logo.ico"
+        Icon="/Assets/miyeuwgo.png"
         Background="{DynamicResource BgWindowBrush}"
         Title="LTFI // Command Center">
 
@@ -35,6 +35,21 @@
 
                 <!-- live status readout -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="9" VerticalAlignment="Center">
+                    <!-- weekly check-in chip: amber while the window is open, red when overdue; opens CHK -->
+                    <Button IsVisible="{Binding ShowCheckInChip}" Command="{Binding OpenCheckInCommand}"
+                            Background="Transparent" BorderThickness="0" Padding="0" VerticalAlignment="Center"
+                            Cursor="Hand" ToolTip.Tip="Weekly check-in — click to open it">
+                        <Panel>
+                            <Border Classes="chip" BorderBrush="{DynamicResource WarningBrush}" IsVisible="{Binding ShowCheckInChipDue}">
+                                <TextBlock Text="{Binding CheckInChipText}" FontWeight="SemiBold" LetterSpacing="0.6"
+                                           Foreground="{DynamicResource WarningBrush}"/>
+                            </Border>
+                            <Border Classes="chip" BorderBrush="{DynamicResource DangerBrush}" IsVisible="{Binding ShowCheckInChipOverdue}">
+                                <TextBlock Text="{Binding CheckInChipText}" FontWeight="SemiBold" LetterSpacing="0.6"
+                                           Foreground="{DynamicResource DangerBrush}"/>
+                            </Border>
+                        </Panel>
+                    </Button>
                     <TextBlock Text="{Binding DateText}" FontSize="10" LetterSpacing="0.6"
                                Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"/>
                     <TextBlock Text="·" Foreground="{DynamicResource TextFainterBrush}" VerticalAlignment="Center"/>

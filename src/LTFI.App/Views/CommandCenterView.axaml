@@ -252,7 +252,13 @@
                                                     <TextBlock FontSize="8.5" LetterSpacing="0.4" TextAlignment="Center"
                                                                Foreground="{Binding TagBrush}" Text="{Binding Tag}"/>
                                                 </Border>
-                                                <TextBlock Grid.Column="2" FontSize="10.5" Classes="muted" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="{Binding Project}"/>
+                                                <!-- project code (first 4 letters/digits) in the project's stable colour, with a thin bar -->
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                                                    <Border Width="2" Height="10" CornerRadius="1" VerticalAlignment="Center"
+                                                            Background="{Binding ProjectBrush}" IsVisible="{Binding HasProject}"/>
+                                                    <TextBlock FontSize="10.5" LetterSpacing="0.3" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                               Foreground="{Binding ProjectBrush}" Text="{Binding Project}"/>
+                                                </StackPanel>
                                                 <TextBlock Grid.Column="3" FontSize="10.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                                                            Foreground="{DynamicResource TextSecondaryBrush}" Text="{Binding Text}"/>
                                             </Grid>
@@ -350,7 +356,11 @@
                         <StackPanel>
                             <Border Classes="panel-hd">
                                 <Grid ColumnDefinitions="Auto,*,Auto">
-                                    <TextBlock Classes="micro" Text="WEEKLY COMMITMENTS" VerticalAlignment="Center"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                        <TextBlock Classes="micro" Text="WEEKLY COMMITMENTS" VerticalAlignment="Center"/>
+                                        <TextBlock Classes="micro-dim" Text="{Binding CommitWeekLabel}" VerticalAlignment="Center"
+                                                   ToolTip.Tip="Commitments made in a weekly check-in cover the following Mon–Sun week. After this week's check-in (Sat/Sun) the panel shows next week's."/>
+                                    </StackPanel>
                                     <TextBlock Grid.Column="2" Classes="micro-dim" Text="{Binding CommitProgress}" VerticalAlignment="Center"
                                                IsVisible="{Binding HasCommitments}"/>
                                 </Grid>
@@ -386,7 +396,7 @@
                             </ItemsControl>
                             <StackPanel Margin="11,9,11,11" Spacing="8" IsVisible="{Binding !HasCommitments}">
                                 <TextBlock Classes="muted" FontSize="10.5" TextWrapping="Wrap"
-                                           Text="No commitments yet — do your weekly check-in"/>
+                                           Text="{Binding CommitEmptyText}"/>
                                 <Button Classes="ghost" Padding="10,4" FontSize="10" HorizontalAlignment="Left"
                                         Content="OPEN CHECK-IN" Command="{Binding OpenCheckInCommand}"/>
                             </StackPanel>

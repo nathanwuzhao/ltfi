@@ -122,7 +122,7 @@ public sealed class TaskService(
             Description = Normalize(draft.Description),
             Status = draft.Status,
             Priority = draft.Priority,
-            DueAt = draft.DueAt,
+            DueAt = DueDates.EndOfDay(draft.DueAt), // due is a date: stored and sent as 23:59
             RequiredTime = ToRequiredTime(draft.RequiredMinutes),
             CreatedAt = now,
             UpdatedAt = now,
@@ -160,12 +160,16 @@ public sealed class TaskService(
 
         // A new due date on a reminder the iPhone already has goes out as an "update" command (while
         // its create is still pending, the create below carries it instead).
-        var pushDue = task.DueAt != draft.DueAt
+        // Due is a date: a changed date is stored (and sent) as that local date at 23:59; an
+        // unchanged one keeps the task's existing value, so a phone-set time isn't rewritten.
+        var dueChanged = task.DueAt != draft.DueAt;
+        var newDue = dueChanged ? DueDates.EndOfDay(draft.DueAt) : task.DueAt;
+        var pushDue = dueChanged
                       && task.ExternalSource == ReminderRules.SourceKey
                       && await FindPendingCreateAsync(db, task, cancellationToken) is null;
         if (pushDue)
         {
-            EnsureCanPushDue(task, draft.DueAt);
+            EnsureCanPushDue(task, newDue);
         }
 
         task.ProjectId = project?.Id;
@@ -173,7 +177,7 @@ public sealed class TaskService(
         task.Title = draft.Title.Trim();
         task.Description = Normalize(draft.Description);
         task.Priority = draft.Priority;
-        task.DueAt = draft.DueAt;
+        task.DueAt = newDue;
         task.RequiredTime = ToRequiredTime(draft.RequiredMinutes);
 
         if (draft.Status == TaskStatus.Completed && !wasCompleted)
@@ -272,19 +276,15 @@ public sealed class TaskService(
     }
 
     /// <summary>
-    /// <paramref name="due"/> moved by <paramref name="days"/> local calendar days at the same local
-    /// time of day (so local midnight stays midnight across DST changes); with no due date, counts
-    /// from <paramref name="today"/>'s local midnight.
+    /// (<paramref name="due"/>'s local date + <paramref name="days"/>) at 23:59, whatever time it had;
+    /// with no due date, counts from <paramref name="today"/>. See <see cref="DueDates.Shift"/>.
     /// </summary>
-    public static DateTimeOffset ShiftDue(DateTimeOffset? due, int days, DateTime today)
-    {
-        var local = (due is { } d ? d.LocalDateTime : today.Date).AddDays(days);
-        local = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
-        return new DateTimeOffset(local, TimeZoneInfo.Local.GetUtcOffset(local));
-    }
+    public static DateTimeOffset ShiftDue(DateTimeOffset? due, int days, DateTime today) =>
+        DueDates.Shift(due, days, today);
 
     private async Task SetDueCoreAsync(LtfiDbContext db, TaskItem task, DateTimeOffset due, CancellationToken cancellationToken)
     {
+        due = DueDates.EndOfDay(due); // due is a date: stored and sent as 23:59
         var now = DateTimeOffset.Now;
         var outboxChanged = false;
         if (task.ExternalSource == ReminderRules.SourceKey)

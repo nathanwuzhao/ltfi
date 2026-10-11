@@ -55,6 +55,8 @@ public static class DependencyInjection
         services.AddSingleton(sp => sp.GetRequiredService<LtfiSettings>().Reminders);
         services.AddSingleton(sp => sp.GetRequiredService<LtfiSettings>().Focus);
         services.AddSingleton(sp => sp.GetRequiredService<LtfiSettings>().Sounds);
+        // Weekly check-in open / gate / due times ("checkIn"); read by Reflection + Commitment services.
+        services.AddSingleton(sp => sp.GetRequiredService<LtfiSettings>().CheckIn.ToSchedule());
         // Write-back: outbox.json beside the export, applied by the iPhone's "LTFI Apply" Shortcut.
         services.AddSingleton<IReminderOutbox>(sp =>
         {

@@ -7,6 +7,8 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <!-- Keep root namespace as LTFI so XAML x:Class (LTFI.App, LTFI.Views.*) resolves unchanged. -->
     <RootNamespace>LTFI</RootNamespace>
+
+    <ApplicationIcon>icon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>

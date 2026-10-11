@@ -106,11 +106,14 @@ public partial class PastCommitment(CommitmentLine line, Action<PastCommitment, 
 public sealed record CheckInHistoryItem(string DateText, string Commitments, string Summary);
 
 /// <summary>
-/// The mandatory weekly check-in (plan §3.6). Shows this week's deterministic review numbers for
-/// context, last week's commitments to settle (kept / missed / carry over), then the fixed
-/// <see cref="WeeklyCheckIn.Questions"/> — Q5 as three structured commitment rows, each optionally
-/// linked to an open reminder. The shell locks navigation onto this page while a check-in is due
-/// and not snoozed; <see cref="GateCleared"/> tells it to unlock.
+/// The mandatory weekly check-in (plan §3.6). It reviews the Mon–Sun week that is ending (window
+/// Sat 00:00 → Sun 23:59 by default, see <see cref="CheckInSchedule"/>). Shows this week's
+/// deterministic review numbers for context, the commitments that applied to the reviewed week to
+/// settle (kept / missed / carry over), then the fixed <see cref="WeeklyCheckIn.Questions"/> — Q5 as
+/// three structured commitment rows for next week, each optionally linked to an open reminder.
+/// Mon–Fri with last week reviewed the form is hidden and the page says when the next window opens.
+/// The shell locks navigation onto this page from the gate time (or while overdue) until submitted
+/// or snoozed; <see cref="GateCleared"/> tells it to re-check.
 /// </summary>
 public partial class CheckInViewModel : ViewModelBase, IRefreshable
 {
@@ -145,12 +148,45 @@ public partial class CheckInViewModel : ViewModelBase, IRefreshable
     [ObservableProperty] private int stalledCount;
     [ObservableProperty] private string activeText = "0/0";
 
-    [ObservableProperty] private bool isDue;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsAmber), nameof(IsCalm))]
+    private bool isDue;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsAmber))]
+    private bool isOverdue;
+
+    /// <summary>Status line colours: amber while due, red when overdue, green when done.</summary>
+    public bool IsAmber => IsDue && !IsOverdue;
+    public bool IsCalm => !IsDue;
+
+    /// <summary>The form (review + questions + submit) is there; Mon–Fri with last week reviewed it is not.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowPastCommitments))]
+    private bool canSubmit;
+
+    /// <summary>The gate is (or would be) up: closing or overdue. Only then can it be snoozed.</summary>
+    [ObservableProperty] private bool isGatePhase;
+
+    /// <summary>"Reviews MON OCT 5 – SUN OCT 11 · due SUN 23:59" — the convention, in one line.</summary>
+    [ObservableProperty] private string conventionText = string.Empty;
+
+    /// <summary>"Next check-in opens SAT OCT 17" (shown when the form isn't available).</summary>
+    [ObservableProperty] private string nextOpensText = string.Empty;
+
+    [ObservableProperty] private string closedDetail = string.Empty;
+    [ObservableProperty] private string pastHeader = "COMMITMENTS UNDER REVIEW";
+    [ObservableProperty] private string submitLabel = "SUBMIT CHECK-IN";
     [ObservableProperty] private string statusText = string.Empty;
     [ObservableProperty] private string snoozeLabel = "SNOOZE 3H";
     [ObservableProperty] private string feedbackMessage = string.Empty;
     [ObservableProperty] private bool hasHistory;
-    [ObservableProperty] private bool hasPastCommitments;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowPastCommitments))]
+    private bool hasPastCommitments;
+
+    public bool ShowPastCommitments => HasPastCommitments && CanSubmit;
     [ObservableProperty] private string pastSummary = string.Empty;
 
     [ObservableProperty]
@@ -303,21 +339,54 @@ public partial class CheckInViewModel : ViewModelBase, IRefreshable
     private void ApplyStatus(WeeklyCheckInStatus status)
     {
         IsDue = status.IsDue;
+        IsOverdue = status.IsOverdue;
+        CanSubmit = status.CanSubmit;
+        IsGatePhase = status.IsGatePhase;
         CanSnooze = status.CanSnooze;
-        SnoozeLabel = $"SNOOZE {ProjectPolicy.CheckInSnoozeHours}H · {status.SnoozesRemaining} LEFT";
+        SnoozeLabel = $"SNOOZE {status.SnoozeHours}H · {status.SnoozesRemaining} LEFT";
+        SubmitLabel = status.IsRevision ? "REVISE CHECK-IN" : "SUBMIT CHECK-IN";
 
-        StatusText = status switch
+        var range = CheckInFormat.WeekRange(status.ReviewWeek);
+        var due = CheckInFormat.DayTime(status.DueAt);
+        var opens = CheckInFormat.Opens(status.NextOpensAt);
+
+        // The convention line names the week the form reviews; when the form is closed, the next one.
+        ConventionText = status.CanSubmit
+            ? $"Reviews {range} · due {due}"
+            : $"Reviews {CheckInFormat.WeekRange(status.ReviewWeek.AddDays(7))} · due {CheckInFormat.DayTime(status.DueAt.AddDays(7))}";
+        NextOpensText = $"Next check-in opens {opens}";
+        ClosedDetail = $"{range} is reviewed. The form comes back when the next window opens; "
+                       + $"its commitments will cover {CheckInFormat.WeekRange(status.ReviewWeek.AddDays(14))}.";
+        PastHeader = $"COMMITMENTS FOR {range}";
+
+        var snooze = status switch
         {
-            { IsDue: false } => $"Done for this week. Next due {Format(status.NextDueAt)}.",
-            { IsSnoozed: true, SnoozedUntil: { } until } => $"Due — snoozed until {until:HH:mm}.",
-            { SnoozesRemaining: 0 } => "Due now. No snoozes left this week — submit to continue (short answers are fine).",
-            _ => "Due now. Answer briefly; only one commitment is required."
+            { IsSnoozed: true, SnoozedUntil: { } until } => $" Snoozed until {until:HH:mm}.",
+            { IsGatePhase: true, SnoozesRemaining: 0 } => " No snoozes left — submit to continue (short answers are fine).",
+            _ => string.Empty
+        };
+
+        StatusText = status.Phase switch
+        {
+            CheckInPhase.Done when status.IsRevision =>
+                $"Done for {range}. You can revise it until {due} (no extra points). Next check-in opens {opens}.",
+            CheckInPhase.Done => $"Done for {range}. Next check-in opens {opens}.",
+            CheckInPhase.Open =>
+                $"Window open — due {due}. The app locks from {CheckInFormat.DayTime(status.GateAt)} until you submit.",
+            CheckInPhase.Closing => $"Due {due}. Answer briefly; only one commitment is required." + snooze,
+            _ => $"Overdue — {due} passed. Submitting now reviews {range} (late)." + snooze
         };
     }
 
     [RelayCommand]
     private async Task SubmitAsync()
     {
+        if (!CanSubmit)
+        {
+            FeedbackMessage = NextOpensText + ".";
+            return;
+        }
+
         try
         {
             var answers = new string?[WeeklyCheckIn.Questions.Count];
@@ -421,8 +490,9 @@ public partial class CheckInViewModel : ViewModelBase, IRefreshable
             .Where(x => x.i != WeeklyCheckIn.CommitmentsQuestionIndex && !string.IsNullOrWhiteSpace(x.a.Answer))
             .Select(x => $"Q{x.i + 1}  {x.a.Answer}"));
 
+        var late = record.IsLate ? " (LATE)" : string.Empty;
         return new CheckInHistoryItem(
-            Format(record.CreatedAt),
+            $"{Format(record.CreatedAt)} · FOR {CheckInFormat.WeekRange(record.ReviewWeek)}{late}",
             AnswerAt(WeeklyCheckIn.CommitmentsQuestionIndex),
             summary);
     }
@@ -432,4 +502,23 @@ public partial class CheckInViewModel : ViewModelBase, IRefreshable
 
     private static string FormatHours(TimeSpan time) =>
         time.TotalHours >= 1 ? $"{(int)time.TotalHours}h {time.Minutes}m" : $"{time.Minutes}m";
+}
+
+/// <summary>Upper-case date labels for the weekly check-in ("MON OCT 5 – SUN OCT 11", "SUN 23:59").</summary>
+internal static class CheckInFormat
+{
+    /// <summary>"MON OCT 5 – SUN OCT 11" for the Mon–Sun week starting <paramref name="monday"/>.</summary>
+    public static string WeekRange(DateOnly monday) => $"{Day(monday)} – {Day(monday.AddDays(6))}";
+
+    public static string Day(DateOnly day) =>
+        day.ToString("ddd MMM d", CultureInfo.InvariantCulture).ToUpperInvariant();
+
+    /// <summary>"SUN 23:59".</summary>
+    public static string DayTime(DateTimeOffset at) =>
+        at.ToString("ddd HH:mm", CultureInfo.InvariantCulture).ToUpperInvariant();
+
+    /// <summary>"SAT OCT 17", plus the time when it isn't midnight ("FRI OCT 16 17:00").</summary>
+    public static string Opens(DateTimeOffset at) =>
+        Day(DateOnly.FromDateTime(at.DateTime))
+        + (at.TimeOfDay == TimeSpan.Zero ? string.Empty : at.ToString(" HH:mm", CultureInfo.InvariantCulture));
 }

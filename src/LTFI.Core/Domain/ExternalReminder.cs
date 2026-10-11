@@ -111,8 +111,9 @@ public static class ReminderRules
 
     /// <summary>
     /// Whether an exported due date shows a due date LTFI pushed (an outbox <c>update</c>/<c>create</c>).
-    /// Same instant within a minute (the phone may drop seconds or write another offset), or — when
-    /// either side is local midnight, i.e. an all-day / date-only reminder — the same local calendar day.
+    /// Due is a calendar date (<see cref="DueDates"/>): the same LOCAL calendar day matches, whatever
+    /// time either side carries (LTFI sends 23:59; the phone may hand back 23:59, 12:00, midnight or a
+    /// date only). Also the same instant within a minute, whatever the offset.
     /// </summary>
     public static bool DueMatches(DateTimeOffset pushed, DateTimeOffset? actual)
     {
@@ -126,9 +127,7 @@ public static class ReminderRules
             return true;
         }
 
-        var p = pushed.LocalDateTime;
-        var l = a.LocalDateTime;
-        return (p.TimeOfDay == TimeSpan.Zero || l.TimeOfDay == TimeSpan.Zero) && p.Date == l.Date;
+        return pushed.LocalDateTime.Date == a.LocalDateTime.Date;
     }
 
     /// <summary>

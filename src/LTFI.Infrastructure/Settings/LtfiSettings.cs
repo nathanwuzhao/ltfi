@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using LTFI.Core.Domain;
 using LTFI.Infrastructure.Persistence;
 
 namespace LTFI.Infrastructure.Settings;
@@ -15,6 +16,74 @@ public sealed class LtfiSettings
     public FocusSettings Focus { get; set; } = new();
 
     public SoundSettings Sounds { get; set; } = new();
+
+    public CheckInSettings CheckIn { get; set; } = new();
+}
+
+/// <summary>
+/// The weekly check-in schedule (<c>"checkIn"</c> in settings.json). A week is Monday 00:00 →
+/// Sunday 23:59 local and a check-in reviews the week that is ending. Days are English day names
+/// ("Saturday"), times are 24h "HH:mm". The moments must be in week order (opens ≤ gateFrom ≤ due);
+/// anything unparsable or out of order falls back to the defaults as a whole.
+/// </summary>
+public sealed class CheckInSettings
+{
+    /// <summary>The check-in window opens (form available, amber header chip).</summary>
+    public string OpensDay { get; set; } = "Saturday";
+
+    public string OpensTime { get; set; } = "00:00";
+
+    /// <summary>From here until submitted the app is gated (snoozable).</summary>
+    public string GateFromDay { get; set; } = "Sunday";
+
+    public string GateFromTime { get; set; } = "18:00";
+
+    /// <summary>The last on-time minute; one minute later the check-in is overdue (red chip, gate).</summary>
+    public string DueDay { get; set; } = "Sunday";
+
+    public string DueTime { get; set; } = "23:59";
+
+    /// <summary>Snoozes allowed per reviewed week.</summary>
+    public int MaxSnoozesPerWeek { get; set; } = ProjectPolicy.MaxCheckInSnoozesPerWeek;
+
+    /// <summary>Length of one snooze, in hours.</summary>
+    public int SnoozeHours { get; set; } = ProjectPolicy.CheckInSnoozeHours;
+
+    /// <summary>The validated schedule, or <see cref="CheckInSchedule.Default"/> when any value is invalid.</summary>
+    public CheckInSchedule ToSchedule()
+    {
+        try
+        {
+            if (TryParse(OpensDay, OpensTime, out var opens)
+                && TryParse(GateFromDay, GateFromTime, out var gate)
+                && TryParse(DueDay, DueTime, out var due))
+            {
+                return new CheckInSchedule(opens, gate, due, MaxSnoozesPerWeek, SnoozeHours);
+            }
+        }
+        catch (ArgumentException)
+        {
+            // out of order / out of range: use the defaults
+        }
+
+        return CheckInSchedule.Default;
+    }
+
+    private static bool TryParse(string? day, string? time, out TimeSpan offset)
+    {
+        offset = default;
+        if (!Enum.TryParse<DayOfWeek>(day?.Trim(), ignoreCase: true, out var dow)
+            || !Enum.IsDefined(dow)
+            || int.TryParse(day, out _)
+            || !TimeOnly.TryParseExact(time?.Trim(), ["HH:mm", "H:mm"], System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var t))
+        {
+            return false;
+        }
+
+        offset = CheckInSchedule.At(dow, t.Hour, t.Minute);
+        return true;
+    }
 }
 
 /// <summary>In-app notification sounds (<c>"sounds"</c> in settings.json).</summary>
@@ -106,12 +175,39 @@ public static class SettingsStore
                 return defaults;
             }
 
-            return JsonSerializer.Deserialize<LtfiSettings>(File.ReadAllText(path), Json) ?? new LtfiSettings();
+            var text = File.ReadAllText(path);
+            var settings = JsonSerializer.Deserialize<LtfiSettings>(text, Json) ?? new LtfiSettings();
+
+            // A file from before the "checkIn" section existed gets it written in with the defaults,
+            // so the schedule is discoverable. Best effort: a read-only file just keeps the defaults.
+            if (!HasProperty(text, "checkIn"))
+            {
+                try
+                {
+                    File.WriteAllText(path, JsonSerializer.Serialize(settings, Json));
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                }
+            }
+
+            return settings;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
             return new LtfiSettings();
         }
+    }
+
+    private static bool HasProperty(string json, string name)
+    {
+        using var doc = JsonDocument.Parse(json, new JsonDocumentOptions
+        {
+            CommentHandling = JsonCommentHandling.Skip,
+            AllowTrailingCommas = true
+        });
+        return doc.RootElement.ValueKind == JsonValueKind.Object
+            && doc.RootElement.EnumerateObject().Any(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

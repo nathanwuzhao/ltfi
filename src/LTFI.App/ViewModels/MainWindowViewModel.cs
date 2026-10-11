@@ -66,6 +66,20 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public bool IsNavEnabled => !IsGated;
 
+    /// <summary>Header chip while a check-in is wanted: "CHECK-IN DUE SUN 23:59" (amber) or "CHECK-IN OVERDUE" (red).</summary>
+    [ObservableProperty] private string checkInChipText = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowCheckInChipDue), nameof(ShowCheckInChipOverdue))]
+    private bool showCheckInChip;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowCheckInChipDue), nameof(ShowCheckInChipOverdue))]
+    private bool isCheckInOverdue;
+
+    public bool ShowCheckInChipDue => ShowCheckInChip && !IsCheckInOverdue;
+    public bool ShowCheckInChipOverdue => ShowCheckInChip && IsCheckInOverdue;
+
     private readonly NavItem _focusNav;
     private readonly FocusViewModel _focus_vm;
     private readonly NavItem _checkInNav;
@@ -221,6 +235,15 @@ public partial class MainWindowViewModel : ViewModelBase
         try
         {
             var status = await _reflections.GetWeeklyCheckInStatusAsync();
+
+            // The chip shows whenever a check-in is wanted (window open or overdue); the gate only
+            // from the gate time (or while overdue) until submitted or snoozed.
+            ShowCheckInChip = status.IsDue;
+            IsCheckInOverdue = status.IsOverdue;
+            CheckInChipText = status.IsOverdue
+                ? "CHECK-IN OVERDUE"
+                : $"CHECK-IN DUE {CheckInFormat.DayTime(status.DueAt)}";
+
             if (status.MustShow && !IsGated)
             {
                 IsGated = true;
@@ -243,6 +266,10 @@ public partial class MainWindowViewModel : ViewModelBase
             Log.Error(ex, "Failed to check the weekly check-in gate");
         }
     }
+
+    /// <summary>The header chip opens the Check-In page.</summary>
+    [RelayCommand]
+    private void OpenCheckIn() => SelectedNav = _checkInNav;
 
     [RelayCommand]
     private void OpenSettings()

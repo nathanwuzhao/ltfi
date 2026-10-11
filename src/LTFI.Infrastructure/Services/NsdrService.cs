@@ -46,7 +46,7 @@ public sealed class NsdrService(
             var remaining = Nsdr.Duration - elapsed;
             var index = Nsdr.CueIndexAt(elapsed);
             var next = index + 1 < Nsdr.Cues.Count ? Nsdr.Cues[index + 1] : null;
-            return new NsdrSnapshot(elapsed, remaining, index, Nsdr.Cues[index], next);
+            return new NsdrSnapshot(elapsed, remaining, index, Nsdr.Cues[index], next, _focusSessionId);
         }
     }
 

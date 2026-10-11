@@ -630,7 +630,7 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
             return false;
         }
 
-        // Due is a date only: a newly chosen date is stored as local midnight; an unchanged date keeps
+        // Due is a date only: a newly chosen date is stored as that local date at 23:59 (DueDates); an unchanged date keeps
         // the task's existing DueAt (including any time it already had).
         DateTimeOffset? dueAt = null;
         var dueText = DraftDueDateText?.Trim() ?? string.Empty;
@@ -644,8 +644,7 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
             }
             else if (DateTime.TryParse(dueText, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
             {
-                dueAt = new DateTimeOffset(DateTime.SpecifyKind(parsed.Date, DateTimeKind.Unspecified),
-                    TimeZoneInfo.Local.GetUtcOffset(parsed.Date));
+                dueAt = DueDates.EndOfDay(parsed.Date);
             }
             else
             {

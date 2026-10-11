@@ -5,8 +5,9 @@ using LTFI.Core.Domain;
 
 namespace LTFI.Core.Abstractions;
 
-/// <summary>A live view of a running NSDR.</summary>
-public sealed record NsdrSnapshot(TimeSpan Elapsed, TimeSpan Remaining, int CueIndex, NsdrCue Cue, NsdrCue? NextCue)
+/// <summary>A live view of a running NSDR. <see cref="FocusSessionId"/>: the session it was taken in, if any.</summary>
+public sealed record NsdrSnapshot(
+    TimeSpan Elapsed, TimeSpan Remaining, int CueIndex, NsdrCue Cue, NsdrCue? NextCue, Guid? FocusSessionId = null)
 {
     public bool IsDue => Remaining <= TimeSpan.Zero;
 }

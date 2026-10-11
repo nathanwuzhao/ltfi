@@ -9,7 +9,8 @@ namespace LTFI.Infrastructure.Services;
 /// <summary>
 /// Pomodoro phases layered on the single focus session. Work countdowns are measured against the
 /// session's own elapsed (so a manual pause freezes them); breaks run on the wall clock while the
-/// session is paused. A long break can be swapped for an NSDR, which <see cref="INsdrService"/> times.
+/// session is paused. A long break can be swapped for an NSDR, which <see cref="INsdrService"/> times,
+/// and <see cref="TakeNsdrAsync"/> starts one from any work interval / break, or inside a FREE session.
 /// Singleton: the phase lives in memory alongside the session's live clock.
 /// </summary>
 public sealed class PomodoroService(
@@ -67,7 +68,8 @@ public sealed class PomodoroService(
             cycle.DotsFilled,
             cycle.Dots,
             _breakOver,
-            cycle.Phase == PomodoroPhase.Work && session.Status == FocusSessionStatus.Paused);
+            cycle.Phase == PomodoroPhase.Work && session.Status == FocusSessionStatus.Paused,
+            cycle.Phase == PomodoroPhase.Nsdr && cycle.NsdrFromWork);
     }
 
     public async Task StartAsync(Guid? projectId, Guid? taskId, string? intent, CancellationToken cancellationToken = default)
@@ -118,6 +120,14 @@ public sealed class PomodoroService(
 
                     if (await _nsdr.CompleteIfDueAsync(cancellationToken) || !_nsdr.IsRunning)
                     {
+                        if (cycle.AfterNsdr == NsdrReturn.ResumeWork)
+                        {
+                            // Back to the paused work interval; the session clock never ran during
+                            // the NSDR, so its remaining time is exactly what it was.
+                            _cycle = cycle.EndBreak();
+                            return PomodoroTransition.NsdrEnded;
+                        }
+
                         _breakOver = true;
                         return PomodoroTransition.BreakEnded;
                     }
@@ -156,6 +166,56 @@ public sealed class PomodoroService(
         _nsdr.Start(_sessionId);
     }
 
+    public async Task<bool> TakeNsdrAsync(CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            if (_nsdr.IsRunning)
+            {
+                return false;
+            }
+
+            var session = CurrentSession();
+            if (session is not null && _cycle is { } cycle)
+            {
+                if (!cycle.CanTakeNsdr)
+                {
+                    return false;
+                }
+
+                // Work interval: pause it here (breaks already keep the session paused).
+                if (cycle.Phase == PomodoroPhase.Work && session.Status == FocusSessionStatus.Active)
+                {
+                    await _focus.PauseAsync(cancellationToken);
+                }
+
+                _cycle = cycle.TakeNsdr();
+                _breakOver = false;
+                _nsdr.Start(_sessionId);
+                return true;
+            }
+
+            // FREE session (no pomodoro run): pause the clock; it stays paused afterwards.
+            if (_focus.GetActiveSnapshot() is not { } free)
+            {
+                return false;
+            }
+
+            if (free.Status == FocusSessionStatus.Active)
+            {
+                await _focus.PauseAsync(cancellationToken);
+            }
+
+            _nsdr.Start(free.Id);
+            return true;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
     public void Reset()
     {
         if (_cycle is { Phase: PomodoroPhase.Nsdr } && !_breakOver)
@@ -184,6 +244,13 @@ public sealed class PomodoroService(
             if (cycle.Phase == PomodoroPhase.Nsdr && !_breakOver)
             {
                 _nsdr.Stop();
+            }
+
+            // An NSDR taken from a work interval returns to that interval, still paused.
+            if (cycle.AfterNsdr == NsdrReturn.ResumeWork)
+            {
+                _cycle = cycle.EndBreak();
+                return;
             }
 
             _cycle = cycle.EndBreak();

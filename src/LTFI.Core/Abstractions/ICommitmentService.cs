@@ -38,13 +38,21 @@ public sealed record LinkableTask(Guid Id, string Title, string? Area, DateTimeO
 /// </summary>
 public interface ICommitmentService
 {
-    /// <summary>The current check-in week's commitments (Dropped ones excluded), in order.
-    /// Also back-fills commitments for a v1 check-in made this week with only free-text Q5.</summary>
+    /// <summary>The commitments that apply to the current Mon–Sun week (made in the check-in that
+    /// reviewed last week), Dropped excluded, in order. Also back-fills commitments for recent v1
+    /// check-ins with only free-text Q5.</summary>
     Task<IReadOnlyList<CommitmentLine>> GetCurrentWeekAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Earlier weeks' commitments the next check-in reviews: the most recent earlier week that has
-    /// commitments (Dropped excluded) plus any still-Open ones from older weeks. Empty once all are resolved.
+    /// What the Command Center shows: this week's commitments, or — once this week's own check-in
+    /// is in (the Sat/Sun window), which settled them — next week's, flagged <see cref="CommitmentPanel.IsNextWeek"/>.
+    /// </summary>
+    Task<CommitmentPanel> GetPanelAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The commitments the check-in being written reviews: those that applied to its review week
+    /// (Dropped excluded) plus any still-Open ones from older weeks. Empty once the review week's
+    /// check-in is in and nothing is Open.
     /// </summary>
     Task<IReadOnlyList<CommitmentLine>> GetPendingReviewAsync(CancellationToken cancellationToken = default);
 
@@ -54,7 +62,11 @@ public interface ICommitmentService
     /// <summary>Open reminder-backed tasks for the link picker (soonest due first).</summary>
     Task<IReadOnlyList<LinkableTask>> GetLinkableTasksAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>Creates commitments for this week's latest check-in from its free-text Q5 when it has
-    /// none (v1 check-ins). Idempotent. Returns how many were created.</summary>
+    /// <summary>Creates commitments from the free-text Q5 of the latest check-in for last week's and
+    /// this week's review (whose commitments apply to this week and next) when it has none (v1
+    /// check-ins). Older check-ins are never back-filled. Idempotent. Returns how many were created.</summary>
     Task<int> BackfillCurrentWeekAsync(CancellationToken cancellationToken = default);
 }
+
+/// <summary>The Command Center's commitments: the week (Monday) they apply to and whether that is next week.</summary>
+public sealed record CommitmentPanel(DateOnly WeekStart, bool IsNextWeek, IReadOnlyList<CommitmentLine> Lines);

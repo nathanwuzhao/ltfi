@@ -182,9 +182,12 @@ public sealed class ReminderOutbox(IDbContextFactory<LtfiDbContext> contextFacto
         return command;
     }
 
-    /// <summary>The update command's fields: just <c>dueDate</c> (full ISO 8601 with offset).</summary>
+    /// <summary>
+    /// The update command's fields: just <c>dueDate</c> (full ISO 8601 with offset), always the
+    /// local date at 23:59 (<see cref="DueDates"/>).
+    /// </summary>
     public static string UpdatePayload(DateTimeOffset due) =>
-        JsonSerializer.Serialize(new Dictionary<string, string> { ["dueDate"] = FormatDue(due) });
+        JsonSerializer.Serialize(new Dictionary<string, string> { ["dueDate"] = FormatDue(DueDates.EndOfDay(due)) });
 
     /// <summary>The <c>dueDate</c> a create/update payload carries; null when empty or unreadable.</summary>
     public static DateTimeOffset? ReadDue(string payloadJson)
@@ -208,12 +211,12 @@ public sealed class ReminderOutbox(IDbContextFactory<LtfiDbContext> contextFacto
             ["title"] = task.Title,
             ["notes"] = task.Description ?? string.Empty,
             ["list"] = task.ExternalList ?? string.Empty,
-            ["dueDate"] = FormatDue(task.DueAt),
+            ["dueDate"] = FormatDue(DueDates.EndOfDay(task.DueAt)), // date at 23:59, or empty
             ["priority"] = ReminderRules.ToApplePriority(task.Priority)
         });
 
     /// <summary>
-    /// Always full ISO 8601 with offset (<c>2026-10-10T00:00:00-04:00</c>), so the Shortcut's
+    /// Always full ISO 8601 with offset (<c>2026-10-10T23:59:00-04:00</c>), so the Shortcut's
     /// Get Dates From Input parses every value the same way. Empty for none.
     /// </summary>
     public static string FormatDue(DateTimeOffset? due) =>

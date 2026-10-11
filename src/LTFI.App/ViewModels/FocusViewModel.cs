@@ -97,12 +97,19 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
     [ObservableProperty] private bool isBreakOver;
     [ObservableProperty] private bool canTakeNsdr;
 
-    // --- NSDR (standalone, or in place of a long break) ---
+    /// <summary>NSDR 10:00 inside the running session (work interval, any break, or FREE mode).</summary>
+    [ObservableProperty] private bool canStartSessionNsdr;
+
+    // --- NSDR (standalone, in place of a break, or inside a session) ---
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowSetup), nameof(ShowActive), nameof(ShowNsdr))]
     private bool isNsdrRunning;
 
     [ObservableProperty] private bool isNsdrInPomodoro;
+
+    /// <summary>What the session offers once the running NSDR ends (None = standalone).</summary>
+    private NsdrReturn _nsdrReturn;
+
     [ObservableProperty] private string nsdrCountdownText = "10:00";
     [ObservableProperty] private string nsdrStepText = string.Empty;
     [ObservableProperty] private string nsdrCueTitle = string.Empty;
@@ -320,6 +327,25 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
         SyncFromService();
     }
 
+    /// <summary>NSDR 10:00 inside the running session: pauses the clock (NSDR time is not work time).</summary>
+    [RelayCommand]
+    private async Task StartSessionNsdrAsync()
+    {
+        try
+        {
+            if (await _pomodoro.TakeNsdrAsync())
+            {
+                FeedbackMessage = string.Empty;
+            }
+
+            SyncFromService();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to start NSDR in the session");
+        }
+    }
+
     [RelayCommand]
     private void StartNsdr()
     {
@@ -338,15 +364,25 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
     {
         try
         {
-            if (IsNsdrInPomodoro)
+            switch (_nsdrReturn)
             {
-                // In place of a long break: stopping early skips straight to the next pomodoro.
-                await _pomodoro.SkipBreakAsync();
-            }
-            else
-            {
-                _nsdr.Stop();
-                FeedbackMessage = "NSDR stopped early — nothing recorded.";
+                case NsdrReturn.ResumeWork:
+                    // Taken from a work interval: back to it, still paused at its remaining time.
+                    await _pomodoro.SkipBreakAsync();
+                    FeedbackMessage = "NSDR stopped early — nothing recorded. Work is paused: RESUME WORK when ready.";
+                    break;
+                case NsdrReturn.StartNextPomodoro:
+                    // In place of a break: stopping early skips straight to the next pomodoro.
+                    await _pomodoro.SkipBreakAsync();
+                    break;
+                case NsdrReturn.ResumeSession:
+                    _nsdr.Stop();
+                    FeedbackMessage = "NSDR stopped early — nothing recorded. Session paused: RESUME when ready.";
+                    break;
+                default:
+                    _nsdr.Stop();
+                    FeedbackMessage = "NSDR stopped early — nothing recorded.";
+                    break;
             }
 
             SyncFromService();
@@ -503,7 +539,7 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
             {
                 var wasNsdr = _pomodoro.GetSnapshot() is { Phase: PomodoroPhase.Nsdr };
                 var transition = await _pomodoro.AdvanceAsync();
-                if (transition is PomodoroTransition.WorkEnded or PomodoroTransition.BreakEnded)
+                if (transition is PomodoroTransition.WorkEnded or PomodoroTransition.BreakEnded or PomodoroTransition.NsdrEnded)
                 {
                     // A work block / NSDR break may have recorded evidence (points, streak).
                     _signals.NotifyStatsChanged();
@@ -513,6 +549,12 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
                 {
                     case PomodoroTransition.WorkEnded:
                         _alert.Raise(Chime.WorkDone);
+                        break;
+                    case PomodoroTransition.NsdrEnded:
+                        // NSDR taken mid-interval reached 10:00: work waits, paused, for RESUME WORK.
+                        EndNsdrAudio();
+                        FeedbackMessage = "NSDR complete — 10 minutes of deep rest logged (+3). Work is paused: RESUME WORK when ready.";
+                        _alert.Raise(Chime.NsdrDone);
                         break;
                     case PomodoroTransition.BreakEnded when wasNsdr:
                         // 10:00 beat the track: stop it before the chime.
@@ -524,12 +566,25 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
                         break;
                 }
             }
-            else if (_nsdr.IsRunning && !_pomodoro.IsActive && await _nsdr.CompleteIfDueAsync())
+            else if (_nsdr.IsRunning && !_pomodoro.IsActive)
             {
-                FeedbackMessage = "NSDR complete — 10 minutes of deep rest logged (+3).";
-                _signals.NotifyStatsChanged();
-                EndNsdrAudio();
-                _alert.Raise(Chime.NsdrDone);
+                // Standalone, or inside a FREE session (which stays paused afterwards).
+                var inSession = _nsdr.GetSnapshot() is { FocusSessionId: not null };
+                if (inSession && _focus.GetActiveSnapshot() is { Status: FocusSessionStatus.Active })
+                {
+                    // The session was resumed elsewhere (Command Center) mid-NSDR: work wins.
+                    _nsdr.Stop();
+                    FeedbackMessage = "Session resumed — NSDR ended early, nothing recorded.";
+                }
+                else if (await _nsdr.CompleteIfDueAsync())
+                {
+                    FeedbackMessage = inSession
+                        ? "NSDR complete — 10 minutes of deep rest logged (+3). Session paused: RESUME when ready."
+                        : "NSDR complete — 10 minutes of deep rest logged (+3).";
+                    _signals.NotifyStatsChanged();
+                    EndNsdrAudio();
+                    _alert.Raise(Chime.NsdrDone);
+                }
             }
         }
         catch (Exception ex)
@@ -553,6 +608,7 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
         {
             HasActiveSession = false;
             IsPomodoroActive = false;
+            CanStartSessionNsdr = false;
             IsRunning = false;
             ElapsedText = "00:00";
             CurrentObjective = string.Empty;
@@ -566,10 +622,18 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
         CurrentObjective = BuildObjective(snapshot);
 
         IsPomodoroActive = pomo is not null;
+        // NSDR 10:00 in the session: any work interval, any break (the long break's TAKE NSDR
+        // INSTEAD already offers it), or FREE mode.
+        CanStartSessionNsdr = !IsNsdrRunning && (pomo is null || (pomo.CanStartNsdr && !pomo.CanTakeNsdr));
         if (pomo is null)
         {
             IsWorkPhase = true; // free mode: pause/resume always allowed
             return;
+        }
+
+        if (pomo.IsWorkPaused)
+        {
+            PauseResumeText = "Resume work";
         }
 
         PhaseLabel = pomo.IsBreakOver
@@ -592,7 +656,16 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
         var nsdr = _nsdr.GetSnapshot();
         IsNsdrInPomodoro = pomo is { Phase: PomodoroPhase.Nsdr, IsBreakOver: false };
         IsNsdrRunning = nsdr is not null;
-        NsdrStopText = IsNsdrInPomodoro ? "END NSDR — START NEXT POMODORO" : "STOP (NOTHING RECORDED)";
+        _nsdrReturn = IsNsdrInPomodoro
+            ? (pomo!.IsNsdrFromWork ? NsdrReturn.ResumeWork : NsdrReturn.StartNextPomodoro)
+            : nsdr is { FocusSessionId: not null } ? NsdrReturn.ResumeSession : NsdrReturn.None;
+        NsdrStopText = _nsdrReturn switch
+        {
+            NsdrReturn.StartNextPomodoro => "END NSDR — START NEXT POMODORO",
+            NsdrReturn.ResumeWork => "STOP — BACK TO WORK (NOTHING RECORDED)",
+            NsdrReturn.ResumeSession => "STOP — BACK TO SESSION (NOTHING RECORDED)",
+            _ => "STOP (NOTHING RECORDED)"
+        };
 
         // Every way an NSDR starts or ends (button, long break, stop, completion, abandon) passes
         // through here, so the track follows the NSDR without per-command hooks.

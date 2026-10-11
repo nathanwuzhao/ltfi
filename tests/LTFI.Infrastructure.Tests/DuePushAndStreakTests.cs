@@ -68,6 +68,9 @@ public sealed class DuePushAndStreakTests : IDisposable
         return new DateTimeOffset(dt, TimeZoneInfo.Local.GetUtcOffset(dt));
     }
 
+    /// <summary>That local date at 23:59, the only time LTFI stores and sends for a due date.</summary>
+    private static DateTimeOffset Eod(int y, int m, int d) => Local(y, m, d, 23, 59);
+
     private static string Iso(DateTimeOffset value) => ReminderOutbox.FormatDue(value);
 
     /// <summary>A reminder the iPhone already has (its create confirmed), with a due date.</summary>
@@ -91,11 +94,13 @@ public sealed class DuePushAndStreakTests : IDisposable
     {
         var (task, outbox, tasks, _) = await SyncedReminderAsync(Local(2026, 10, 10, 9, 30));
 
+        // Any time of day given → that local date at 23:59.
         await tasks.SetDueDateAsync(task.Id, Local(2026, 10, 12, 9, 30));
         var command = Assert.Single(ReadOutboxCommands());
         Assert.Equal("update", command.GetProperty("op").GetString());
         Assert.Equal(task.ExternalId, command.GetProperty("url").GetString());
-        Assert.Equal(Iso(Local(2026, 10, 12, 9, 30)), command.GetProperty("dueDate").GetString());
+        Assert.Equal(Iso(Eod(2026, 10, 12)), command.GetProperty("dueDate").GetString());
+        Assert.Contains("T23:59:00", command.GetProperty("dueDate").GetString());
         // Flat strings, exactly op/url/dueDate, full ISO 8601 with offset.
         Assert.Equal(["op", "url", "dueDate"], command.EnumerateObject().Select(p => p.Name));
         Assert.All(command.EnumerateObject(), p => Assert.Equal(JsonValueKind.String, p.Value.ValueKind));
@@ -103,12 +108,12 @@ public sealed class DuePushAndStreakTests : IDisposable
 
         var pending = (await tasks.GetByIdAsync(task.Id))!;
         Assert.True(pending.IsPendingOnPhone);
-        Assert.Equal(Local(2026, 10, 12, 9, 30), pending.DueAt);
+        Assert.Equal(Eod(2026, 10, 12), pending.DueAt); // stored = the instant sent
 
         // A newer date replaces the queued one: still a single update.
         await tasks.PushDueByDaysAsync(task.Id, 1);
         command = Assert.Single(ReadOutboxCommands());
-        Assert.Equal(Iso(Local(2026, 10, 13, 9, 30)), command.GetProperty("dueDate").GetString());
+        Assert.Equal(Iso(Eod(2026, 10, 13)), command.GetProperty("dueDate").GetString());
         Assert.Equal(1, await outbox.CountPendingAsync());
     }
 
@@ -124,13 +129,14 @@ public sealed class DuePushAndStreakTests : IDisposable
         var command = Assert.Single(ReadOutboxCommands());
         Assert.Equal("create", command.GetProperty("op").GetString());
         Assert.Equal("Order filament", command.GetProperty("title").GetString());
-        Assert.Equal(Iso(Local(2026, 10, 11)), command.GetProperty("dueDate").GetString());
+        Assert.Equal(Iso(Eod(2026, 10, 11)), command.GetProperty("dueDate").GetString());
 
         // Same through the editor.
         await tasks.UpdateAsync(task.Id, new TaskDraft { Title = "Order filament", DueAt = Local(2026, 10, 20) });
         command = Assert.Single(ReadOutboxCommands());
         Assert.Equal("create", command.GetProperty("op").GetString());
-        Assert.Equal(Iso(Local(2026, 10, 20)), command.GetProperty("dueDate").GetString());
+        Assert.Equal(Iso(Eod(2026, 10, 20)), command.GetProperty("dueDate").GetString());
+        Assert.Equal(Eod(2026, 10, 20), (await tasks.GetByIdAsync(task.Id))!.DueAt);
     }
 
     [Fact]
@@ -144,7 +150,7 @@ public sealed class DuePushAndStreakTests : IDisposable
         });
         var command = Assert.Single(ReadOutboxCommands());
         Assert.Equal("update", command.GetProperty("op").GetString());
-        Assert.Equal(Iso(Local(2026, 10, 15)), command.GetProperty("dueDate").GetString());
+        Assert.Equal(Iso(Eod(2026, 10, 15)), command.GetProperty("dueDate").GetString());
 
         // Clearing a due date can't be pushed.
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => tasks.UpdateAsync(task.Id, new TaskDraft
@@ -152,12 +158,12 @@ public sealed class DuePushAndStreakTests : IDisposable
             Title = task.Title, ProjectId = task.ProjectId, AreaId = task.AreaId, DueAt = null
         }));
         Assert.Equal(TaskService.CannotClearDueMessage, ex.Message);
-        Assert.Equal(Local(2026, 10, 15), (await tasks.GetByIdAsync(task.Id))!.DueAt);
+        Assert.Equal(Eod(2026, 10, 15), (await tasks.GetByIdAsync(task.Id))!.DueAt);
 
-        // An unchanged due date queues nothing new.
+        // An unchanged due date (the editor hands back the stored value) queues nothing new.
         await tasks.UpdateAsync(task.Id, new TaskDraft
         {
-            Title = task.Title, ProjectId = task.ProjectId, AreaId = task.AreaId, DueAt = Local(2026, 10, 15)
+            Title = task.Title, ProjectId = task.ProjectId, AreaId = task.AreaId, DueAt = Eod(2026, 10, 15)
         });
         Assert.Single(ReadOutboxCommands());
     }
@@ -203,7 +209,7 @@ public sealed class DuePushAndStreakTests : IDisposable
     {
         var (task, _, tasks, sync) = await SyncedReminderAsync(Local(2026, 10, 10));
         var pushed = await tasks.PushDueByDaysAsync(task.Id, 1);
-        Assert.Equal(Local(2026, 10, 11), pushed); // midnight stays midnight
+        Assert.Equal(Eod(2026, 10, 11), pushed); // the next date at 23:59
 
         // The export writes it date-only (all-day reminder).
         WriteExport($$"""{"title":"Pay rent","list":"LTFI","url":"{{task.ExternalId}}","dueDate":"2026-10-11","creationDate":"2026-10-01T09:00:00Z"}""");
@@ -213,16 +219,38 @@ public sealed class DuePushAndStreakTests : IDisposable
     }
 
     [Fact]
-    public void Due_matching_tolerates_seconds_offsets_and_date_only_but_not_other_days()
+    public void Due_matching_is_the_same_local_calendar_day_whatever_the_time()
     {
-        var pushed = Local(2026, 10, 11, 9, 30);
+        var pushed = Eod(2026, 10, 11);
         Assert.True(ReminderRules.DueMatches(pushed, pushed.AddSeconds(30)));
-        Assert.True(ReminderRules.DueMatches(pushed, pushed.ToUniversalTime()));
+        Assert.True(ReminderRules.DueMatches(pushed, pushed.ToUniversalTime()));     // next day in UTC, same local day
         Assert.True(ReminderRules.DueMatches(pushed, Local(2026, 10, 11)));          // phone shows the day only
-        Assert.True(ReminderRules.DueMatches(Local(2026, 10, 11), Local(2026, 10, 11, 9, 0))); // pushed all-day
-        Assert.False(ReminderRules.DueMatches(pushed, Local(2026, 10, 11, 10, 30)));
+        Assert.True(ReminderRules.DueMatches(pushed, Local(2026, 10, 11, 12, 0)));   // the Shortcut's noon
+        Assert.True(ReminderRules.DueMatches(Local(2026, 10, 11, 9, 30), Local(2026, 10, 11, 10, 30)));
         Assert.False(ReminderRules.DueMatches(pushed, Local(2026, 10, 12)));
+        Assert.False(ReminderRules.DueMatches(pushed, Local(2026, 10, 10, 23, 59)));
         Assert.False(ReminderRules.DueMatches(pushed, null));
+    }
+
+    [Fact]
+    public async Task A_phone_noon_due_pushed_by_one_day_goes_out_at_2359_and_confirms_on_that_day()
+    {
+        // The owner's case: LTFI once sent midnight, the Shortcut stored 12:00 PM, the export brought
+        // back 12:00. The next +1D must send the following date at 23:59, not 12:00 again.
+        var noon = Local(2026, 10, 10, 12, 0);
+        var (task, outbox, tasks, sync) = await SyncedReminderAsync(noon);
+        Assert.Equal(noon, task.DueAt); // phone data isn't rewritten by the sync
+
+        var pushed = await tasks.PushDueByDaysAsync(task.Id, 1);
+        Assert.Equal(Eod(2026, 10, 11), pushed);
+        var command = Assert.Single(ReadOutboxCommands());
+        Assert.Equal(Iso(Eod(2026, 10, 11)), command.GetProperty("dueDate").GetString());
+        Assert.StartsWith("2026-10-11T23:59:00", command.GetProperty("dueDate").GetString());
+
+        // The phone hands back 12:00 on the 11th (or 23:59): same local day → confirmed.
+        WriteExport($$"""{"title":"Pay rent","list":"LTFI","url":"{{task.ExternalId}}","dueDate":"{{Iso(Local(2026, 10, 11, 12, 0))}}","creationDate":"2026-10-01T09:00:00Z"}""");
+        Assert.Equal(1, (await sync.SyncAsync()).Confirmed);
+        Assert.Equal(0, await outbox.CountPendingAsync());
     }
 
     [Fact]
@@ -241,24 +269,43 @@ public sealed class DuePushAndStreakTests : IDisposable
 
         var command = Assert.Single(ReadOutboxCommands());
         Assert.Equal("update", command.GetProperty("op").GetString());
-        Assert.Equal(Iso(Local(2026, 10, 12)), command.GetProperty("dueDate").GetString());
+        Assert.Equal(Iso(Eod(2026, 10, 12)), command.GetProperty("dueDate").GetString());
         var current = (await tasks.GetByIdAsync(task.Id))!;
-        Assert.Equal(Local(2026, 10, 12), current.DueAt);
+        Assert.Equal(Eod(2026, 10, 12), current.DueAt);
         Assert.True(current.IsPendingOnPhone);
     }
 
     // ---------------------------------------------------------------- rules
 
     [Fact]
-    public void Push_keeps_the_time_of_day_and_counts_from_today_without_a_due_date()
+    public void Push_moves_the_local_date_and_always_lands_on_2359()
     {
         var today = new DateTime(2026, 10, 6);
-        Assert.Equal(Local(2026, 10, 11, 17, 45), TaskService.ShiftDue(Local(2026, 10, 10, 17, 45), 1, today));
-        Assert.Equal(Local(2026, 10, 11), TaskService.ShiftDue(Local(2026, 10, 10), 1, today));
-        Assert.Equal(Local(2026, 10, 7), TaskService.ShiftDue(null, 1, today));
-        // Across a DST change the local wall-clock time is kept (US: Nov 1 2026).
+        Assert.Equal(Eod(2026, 10, 11), TaskService.ShiftDue(Local(2026, 10, 10, 17, 45), 1, today));
+        Assert.Equal(Eod(2026, 10, 11), TaskService.ShiftDue(Local(2026, 10, 10), 1, today));
+        Assert.Equal(Eod(2026, 10, 11), TaskService.ShiftDue(Local(2026, 10, 10, 12, 0), 1, today)); // phone noon
+        Assert.Equal(Eod(2026, 10, 11), TaskService.ShiftDue(Eod(2026, 10, 10), 1, today));
+        Assert.Equal(Eod(2026, 10, 7), TaskService.ShiftDue(null, 1, today));
+        // By local date, not by UTC: 23:59 local is already tomorrow in UTC west of Greenwich.
+        Assert.Equal(Eod(2026, 10, 11), TaskService.ShiftDue(Eod(2026, 10, 10).ToUniversalTime(), 1, today));
+        // Across a DST change it is still 23:59 local (US: Nov 1 2026).
         var shifted = TaskService.ShiftDue(Local(2026, 10, 31, 9, 0), 2, today);
-        Assert.Equal(new DateTime(2026, 11, 2, 9, 0, 0), shifted.LocalDateTime);
+        Assert.Equal(new DateTime(2026, 11, 2, 23, 59, 0), shifted.LocalDateTime);
+    }
+
+    [Fact]
+    public void Due_dates_are_end_of_day_and_noon_or_midnight_read_as_date_only()
+    {
+        Assert.Equal(Eod(2026, 10, 11), DueDates.EndOfDay(new DateTime(2026, 10, 11, 8, 15, 0)));
+        Assert.Equal(Eod(2026, 10, 11), DueDates.EndOfDay(Local(2026, 10, 11)));
+        Assert.Equal(Eod(2026, 10, 11), DueDates.EndOfDay((DateTimeOffset?)Local(2026, 10, 11, 12, 0)));
+        Assert.Null(DueDates.EndOfDay((DateTimeOffset?)null));
+        Assert.Equal(new TimeSpan(23, 59, 0), DueDates.EndOfDay(Local(2026, 3, 8)).LocalDateTime.TimeOfDay);
+
+        Assert.True(DueDates.IsDateOnly(Local(2026, 10, 11)));
+        Assert.True(DueDates.IsDateOnly(Local(2026, 10, 11, 12, 0)));
+        Assert.True(DueDates.IsDateOnly(Eod(2026, 10, 11)));
+        Assert.False(DueDates.IsDateOnly(Local(2026, 10, 11, 9, 30)));
     }
 
     [Fact]

@@ -161,6 +161,18 @@
                         </StackPanel>
                     </StackPanel>
 
+                    <!-- NSDR inside the session: pauses the clock (NSDR time is not work time) -->
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10" IsVisible="{Binding CanStartSessionNsdr}">
+                        <StackPanel Spacing="2" VerticalAlignment="Center">
+                            <TextBlock Classes="micro" Text="NON-SLEEP DEEP REST"/>
+                            <c:WrapTextBlock Classes="faint" FontSize="10" TextWrapping="Wrap"
+                                             Text="Pauses the session clock; logged (+3) when the full 10:00 is done."/>
+                        </StackPanel>
+                        <Button Grid.Column="1" Classes="ghost" Content="NSDR 10:00" VerticalAlignment="Center"
+                                ToolTip.Tip="Rest now. The work interval resumes where it was; a break is replaced by the NSDR."
+                                Command="{Binding StartSessionNsdrCommand}"/>
+                    </Grid>
+
                     <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
                         <Button Content="{Binding PauseResumeText}"
                                 IsEnabled="{Binding IsWorkPhase}"

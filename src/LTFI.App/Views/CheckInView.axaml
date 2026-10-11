@@ -11,16 +11,22 @@
     <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="9" Spacing="8">
 
-            <!-- header strip: title + due status -->
+            <!-- header strip: title + the convention (which week, when due) + status -->
             <Border Classes="panel">
-                <Grid Margin="12,10" ColumnDefinitions="Auto,*">
-                    <TextBlock Classes="page-title" Text="{Binding Header}" VerticalAlignment="Center"/>
-                    <TextBlock Grid.Column="1" Margin="16,0,0,0" FontSize="11" TextWrapping="Wrap"
+                <Grid Margin="12,10" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
+                    <TextBlock Grid.RowSpan="2" Classes="page-title" Text="{Binding Header}" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Margin="16,0,0,2" Classes="micro" TextWrapping="Wrap"
+                               VerticalAlignment="Center" Text="{Binding ConventionText}"
+                               ToolTip.Tip="A week runs Monday 00:00 → Sunday 23:59. The check-in reviews the week that is ending; its commitments cover the next week."/>
+                    <TextBlock Grid.Column="1" Grid.Row="1" Margin="16,0,0,0" FontSize="11" TextWrapping="Wrap"
                                VerticalAlignment="Center" Text="{Binding StatusText}"
-                               Foreground="{DynamicResource WarningBrush}" IsVisible="{Binding IsDue}"/>
-                    <TextBlock Grid.Column="1" Margin="16,0,0,0" FontSize="11" TextWrapping="Wrap"
+                               Foreground="{DynamicResource WarningBrush}" IsVisible="{Binding IsAmber}"/>
+                    <TextBlock Grid.Column="1" Grid.Row="1" Margin="16,0,0,0" FontSize="11" TextWrapping="Wrap"
                                VerticalAlignment="Center" Text="{Binding StatusText}"
-                               Foreground="{DynamicResource AccentBrush}" IsVisible="{Binding !IsDue}"/>
+                               Foreground="{DynamicResource DangerBrush}" IsVisible="{Binding IsOverdue}"/>
+                    <TextBlock Grid.Column="1" Grid.Row="1" Margin="16,0,0,0" FontSize="11" TextWrapping="Wrap"
+                               VerticalAlignment="Center" Text="{Binding StatusText}"
+                               Foreground="{DynamicResource AccentBrush}" IsVisible="{Binding IsCalm}"/>
                 </Grid>
             </Border>
 
@@ -29,12 +35,20 @@
                 <!-- ==== LEFT: last week's commitments + the questions ==== -->
                 <StackPanel Spacing="8" VerticalAlignment="Top">
 
-                <!-- LAST WEEK'S COMMITMENTS: settle each (kept / missed / carry over) -->
-                <Border Classes="panel" IsVisible="{Binding HasPastCommitments}">
+                <!-- form closed (Mon–Fri with last week reviewed): when the next window opens -->
+                <Border Classes="panel" IsVisible="{Binding !CanSubmit}">
+                    <StackPanel Margin="12,12" Spacing="6">
+                        <TextBlock Classes="micro" Text="{Binding NextOpensText}"/>
+                        <TextBlock Classes="dim" FontSize="11" TextWrapping="Wrap" Text="{Binding ClosedDetail}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- COMMITMENTS FOR <review week>: settle each (kept / missed / carry over) -->
+                <Border Classes="panel" IsVisible="{Binding ShowPastCommitments}">
                     <StackPanel>
                         <Border Classes="panel-hd">
                             <Grid ColumnDefinitions="*,Auto">
-                                <TextBlock Classes="micro" Text="LAST WEEK'S COMMITMENTS"/>
+                                <TextBlock Classes="micro" Text="{Binding PastHeader}"/>
                                 <TextBlock Grid.Column="1" Classes="micro-dim" Text="{Binding PastSummary}"/>
                             </Grid>
                         </Border>
@@ -66,11 +80,11 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                         <TextBlock Classes="faint" FontSize="9.5" Margin="12,2,12,10" TextWrapping="Wrap"
-                                   Text="Anything left unchosen counts as missed when you submit. Carry over copies it into this week's commitments below."/>
+                                   Text="Anything left unchosen counts as missed when you submit. Carry over copies it into next week's commitments below."/>
                     </StackPanel>
                 </Border>
 
-                <Border Classes="panel">
+                <Border Classes="panel" IsVisible="{Binding CanSubmit}">
                     <StackPanel>
                         <Border Classes="panel-hd">
                             <Grid ColumnDefinitions="*,Auto">
@@ -148,9 +162,9 @@
                         <Border BorderBrush="{DynamicResource BorderInnerBrush}" BorderThickness="0,1,0,0" Padding="12,9">
                             <StackPanel Spacing="8">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <Button Classes="primary" Content="SUBMIT CHECK-IN" Command="{Binding SubmitCommand}"/>
+                                    <Button Classes="primary" Content="{Binding SubmitLabel}" Command="{Binding SubmitCommand}"/>
                                     <Button Classes="ghost" Content="{Binding SnoozeLabel}" Command="{Binding SnoozeCommand}"
-                                            IsVisible="{Binding IsDue}"/>
+                                            IsVisible="{Binding IsGatePhase}"/>
                                 </StackPanel>
                                 <TextBlock Foreground="{DynamicResource WarningBrush}" FontSize="11"
                                            TextWrapping="Wrap" Text="{Binding FeedbackMessage}"/>

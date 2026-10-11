@@ -38,6 +38,7 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
     private readonly DispatcherTimer _clock;
 
     private readonly Dictionary<Guid, string> _projectTitles = new();
+    private readonly HashSet<Guid> _standingProjects = new(); // project-code colour: standing = neutral
     private Guid? _selectedProjectId;
     private DateOnly? _selectedDay;
 
@@ -93,6 +94,11 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
     [ObservableProperty] private string evidenceEmptyText = string.Empty;
     [ObservableProperty] private string commitProgress = "0 / 0";
     [ObservableProperty] private bool hasCommitments;
+
+    /// <summary>"THIS WEEK", or "NEXT WEEK · FROM MON OCT 12" once this week's check-in is in (Sat/Sun).</summary>
+    [ObservableProperty] private string commitWeekLabel = "THIS WEEK";
+    [ObservableProperty] private bool commitIsNextWeek;
+    [ObservableProperty] private string commitEmptyText = "No commitments yet — do your weekly check-in";
     [ObservableProperty] private string activeLimitText = "0 / 4 LIMIT";
 
     // --- PROJECT PROGRESS ---
@@ -264,9 +270,14 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
     {
         var projects = await _projectService.GetAllAsync();
         _projectTitles.Clear();
+        _standingProjects.Clear();
         foreach (var p in projects)
         {
             _projectTitles[p.Id] = p.Title;
+            if (p.IsStanding)
+            {
+                _standingProjects.Add(p.Id);
+            }
         }
 
         // --- CONTRIBUTIONS (year graph) ---
@@ -477,7 +488,9 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
                     : e.OccurredAt.LocalDateTime.ToString("HH:mm", CultureInfo.InvariantCulture),
                 Tag = TypeTag(e.Type),
                 TagBrush = TypeBrush(e.Type),
-                Project = e.ProjectTitle is { } t ? Code(t) : "—",
+                Project = e.ProjectTitle is { } t ? Code(t) : ProjectCodes.None,
+                ProjectBrush = ProjectBrushFor(e.ProjectId),
+                HasProject = e.ProjectId is not null,
                 Text = e.Title,
             });
         }
@@ -499,7 +512,17 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
 
     private async Task LoadCommitmentsAsync()
     {
-        var lines = await _commitments.GetCurrentWeekAsync();
+        // This week's commitments (made in last week's check-in). Once this week's own check-in is
+        // in, it has settled them, so the panel switches to the ones it made for next week.
+        var panel = await _commitments.GetPanelAsync();
+        var lines = panel.Lines;
+        CommitIsNextWeek = panel.IsNextWeek;
+        CommitWeekLabel = panel.IsNextWeek
+            ? $"NEXT WEEK · FROM {CheckInFormat.Day(panel.WeekStart)}"
+            : "THIS WEEK";
+        CommitEmptyText = panel.IsNextWeek
+            ? "No commitments for next week."
+            : "No commitments for this week — they come from last week's check-in.";
 
         Commitments.Clear();
         foreach (var c in lines)
@@ -733,18 +756,14 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
             : local.ToString("MMM dd", CultureInfo.InvariantCulture).ToUpperInvariant();
     }
 
-    /// <summary>A short, deterministic project code from a title (letters/digits, first 7).</summary>
-    private static string Code(string title)
-    {
-        var words = title.Split(new[] { ' ', '-', '_', '/', '.' }, StringSplitOptions.RemoveEmptyEntries);
-        if (words.Length >= 2)
-        {
-            var acronym = string.Concat(words.Take(4).Select(w => char.ToUpperInvariant(w[0])));
-            if (acronym.Length >= 2) return acronym;
-        }
-        var raw = new string(title.Where(char.IsLetterOrDigit).Take(7).ToArray());
-        return raw.Length == 0 ? "—" : raw.ToUpperInvariant();
-    }
+    /// <summary>The project code everywhere on this page: first 4 letters/digits ("boids 01" → "BOID").</summary>
+    private static string Code(string title) => ProjectCodes.Code(title);
+
+    /// <summary>The project's stable colour (by id; standing projects neutral); dim for no project.</summary>
+    private IBrush ProjectBrushFor(Guid? projectId) =>
+        projectId is { } id
+            ? ProjectBrushes.For(ProjectCodes.ColorFor(id, _standingProjects.Contains(id)))
+            : CcBrush.Faint;
 
     private static string TypeTag(EvidenceType type) => type switch
     {
@@ -824,7 +843,31 @@ public sealed class EvidenceRow
     public string Tag { get; init; } = string.Empty;
     public IBrush TagBrush { get; init; } = CcBrush.Dim;
     public string Project { get; init; } = string.Empty;
+
+    /// <summary>The project's stable colour (<see cref="ProjectCodes"/>): code text + left bar.</summary>
+    public IBrush ProjectBrush { get; init; } = CcBrush.Faint;
+    public bool HasProject { get; init; }
     public string Text { get; init; } = string.Empty;
+}
+
+/// <summary>Frozen brushes for <see cref="ProjectCodes"/> colours, cached per hex value.</summary>
+internal static class ProjectBrushes
+{
+    private static readonly Dictionary<string, IBrush> Cache = new(StringComparer.OrdinalIgnoreCase);
+
+    public static IBrush For(string hex)
+    {
+        lock (Cache)
+        {
+            if (!Cache.TryGetValue(hex, out var brush))
+            {
+                brush = new SolidColorBrush(Color.Parse(hex)).ToImmutable();
+                Cache[hex] = brush;
+            }
+
+            return brush;
+        }
+    }
 }
 
 public sealed class DebtRow
