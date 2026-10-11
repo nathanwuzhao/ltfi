@@ -232,6 +232,36 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
         ApplyFilter(selectedId);
     }
 
+    /// <summary>
+    /// Reloads the task list only (after a reminders sync), leaving the editor alone so an unsaved
+    /// edit survives. The selected task stays selected; if it left the list (e.g. completed on the
+    /// iPhone with archived hidden) the page falls back to a full re-filter.
+    /// </summary>
+    public async Task RefreshListAsync()
+    {
+        var selectedId = SelectedTask?.Id;
+        var tasks = await _taskService.GetAllAsync();
+        _allTasks.Clear();
+        _allTasks.AddRange(tasks);
+
+        _suppressSelectionLoad = true;
+        try
+        {
+            RebuildRows();
+            SelectedTask = Tasks.FirstOrDefault(t => t.Id == selectedId);
+            SelectedRow = SelectedTask;
+        }
+        finally
+        {
+            _suppressSelectionLoad = false;
+        }
+
+        if (selectedId is not null && SelectedTask is null)
+        {
+            ApplyFilter(null);
+        }
+    }
+
     partial void OnShowArchivedChanged(bool value) => ApplyFilter(SelectedTask?.Id);
 
     private static bool IsArchived(TaskItem task) =>
