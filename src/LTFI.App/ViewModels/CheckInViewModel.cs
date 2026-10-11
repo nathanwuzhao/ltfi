@@ -55,6 +55,12 @@ public partial class CommitmentInput : ObservableObject
     /// <summary>The last-week commitment this row was carried over from, if any.</summary>
     public Guid? CarriedFrom { get; set; }
 
+    /// <summary>When revising: the saved commitment this row was prefilled from (updated in place on submit).</summary>
+    public Guid? ExistingId { get; set; }
+
+    /// <summary>When revising: the prefilled commitment is already kept (it stays kept).</summary>
+    [ObservableProperty] private bool isKept;
+
     public bool IsEmpty => string.IsNullOrWhiteSpace(Text);
 
     public void Clear()
@@ -62,6 +68,8 @@ public partial class CommitmentInput : ObservableObject
         Text = string.Empty;
         SelectedLink = LinkOptions.FirstOrDefault();
         CarriedFrom = null;
+        ExistingId = null;
+        IsKept = false;
     }
 }
 
@@ -123,6 +131,9 @@ public partial class CheckInViewModel : ViewModelBase, IRefreshable
     private readonly IReviewService _review;
     private readonly ICommitmentService _commitments;
     private bool _restoringChoices;
+
+    /// <summary>The check-in the form was last prefilled from for a revision (null: not revising).</summary>
+    private Guid? _prefilledFrom;
 
     /// <summary>Raised after a successful submit or snooze, so the shell can re-check the gate.</summary>
     public event EventHandler? GateCleared;
@@ -220,10 +231,12 @@ public partial class CheckInViewModel : ViewModelBase, IRefreshable
         StalledCount = r.StalledProjects.Count;
         ActiveText = $"{r.ActiveProjectCount}/{r.MaxActiveProjects}";
 
-        ApplyStatus(await _reflections.GetWeeklyCheckInStatusAsync());
+        var status = await _reflections.GetWeeklyCheckInStatusAsync();
+        ApplyStatus(status);
 
         await LoadLinkOptionsAsync();
         await LoadPastCommitmentsAsync();
+        await LoadRevisionAsync(status);
 
         History.Clear();
         foreach (var record in await _reflections.GetWeeklyCheckInHistoryAsync(5))
@@ -255,6 +268,75 @@ public partial class CheckInViewModel : ViewModelBase, IRefreshable
         for (var i = 0; i < CommitmentInputs.Count; i++)
         {
             CommitmentInputs[i].SelectedLink = LinkOptions.FirstOrDefault(o => o.Id == chosen[i]) ?? NoLink;
+        }
+    }
+
+    /// <summary>
+    /// While revising, fills the form with the submitted answers and commitments — once per saved
+    /// check-in, so edits survive the shell refresh. Once the revision window closes the prefill is
+    /// cleared, so the next week's form starts blank.
+    /// </summary>
+    private async Task LoadRevisionAsync(WeeklyCheckInStatus status)
+    {
+        var revision = status.IsRevision ? await _reflections.GetRevisionAsync() : null;
+        if (revision is null)
+        {
+            if (_prefilledFrom is not null)
+            {
+                _prefilledFrom = null;
+                ClearForm();
+            }
+            return;
+        }
+
+        if (revision.CheckIn.Id == _prefilledFrom)
+        {
+            return;
+        }
+
+        _prefilledFrom = revision.CheckIn.Id;
+        ClearForm();
+
+        var answers = revision.CheckIn.Answers;
+        foreach (var q in Questions.Concat(QuestionsAfter))
+        {
+            q.Answer = answers.Count > q.Index ? answers[q.Index].Answer : string.Empty;
+        }
+
+        if (revision.Commitments.Count > 0)
+        {
+            foreach (var (line, row) in revision.Commitments.Zip(CommitmentInputs))
+            {
+                row.Text = line.Text;
+                row.ExistingId = line.Id;
+                row.IsKept = line.IsKept;
+                // The picker only lists open reminders; a link to a closed one shows as "no link"
+                // (the service keeps a Kept row's link regardless).
+                row.SelectedLink = LinkOptions.FirstOrDefault(o => o.Id is not null && o.Id == line.LinkedTaskId) ?? NoLink;
+            }
+        }
+        else
+        {
+            // A v1 free-text check-in: its commitments live only in the Q5 answer.
+            var q5 = answers.Count > WeeklyCheckIn.CommitmentsQuestionIndex
+                ? answers[WeeklyCheckIn.CommitmentsQuestionIndex].Answer
+                : null;
+            foreach (var (text, row) in WeeklyCommitments.SplitLegacyAnswer(q5).Zip(CommitmentInputs))
+            {
+                row.Text = text;
+            }
+        }
+    }
+
+    private void ClearForm()
+    {
+        foreach (var q in Questions.Concat(QuestionsAfter))
+        {
+            q.Answer = string.Empty;
+        }
+        foreach (var c in CommitmentInputs)
+        {
+            c.Clear();
         }
     }
 
@@ -327,6 +409,8 @@ public partial class CheckInViewModel : ViewModelBase, IRefreshable
 
             row.Text = item.Text;
             row.CarriedFrom = item.Id;
+            row.ExistingId = null; // an emptied revision row becomes a new commitment
+            row.IsKept = false;
             // Keep the link only while the reminder is still open (it's in the picker then).
             row.SelectedLink = item.Line.LinkedTaskOpen
                 ? LinkOptions.FirstOrDefault(o => o.Id == item.Line.LinkedTaskId) ?? NoLink
@@ -396,7 +480,7 @@ public partial class CheckInViewModel : ViewModelBase, IRefreshable
             }
 
             var drafts = CommitmentInputs
-                .Select(c => new CommitmentDraft(c.Text, c.SelectedLink?.Id))
+                .Select(c => new CommitmentDraft(c.Text, c.SelectedLink?.Id, c.ExistingId))
                 .ToList();
 
             // Kept → Kept; Missed / Carry over / no choice → Missed (the service's default).
@@ -406,14 +490,9 @@ public partial class CheckInViewModel : ViewModelBase, IRefreshable
 
             await _reflections.SaveWeeklyCheckInAsync(answers, drafts, resolutions);
 
-            foreach (var q in Questions.Concat(QuestionsAfter))
-            {
-                q.Answer = string.Empty;
-            }
-            foreach (var c in CommitmentInputs)
-            {
-                c.Clear();
-            }
+            // While still revisable, the refresh below prefills the form again from what was just saved.
+            ClearForm();
+            _prefilledFrom = null;
             PastCommitments.Clear();
             FeedbackMessage = string.Empty;
             await RefreshAsync();

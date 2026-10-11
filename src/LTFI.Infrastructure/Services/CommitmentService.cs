@@ -182,17 +182,21 @@ public sealed class CommitmentService(
     {
         for (var i = 0; i < drafts.Count; i++)
         {
-            db.Commitments.Add(new WeeklyCommitment
-            {
-                CheckInId = checkIn.Id,
-                WeekStart = week,
-                Text = drafts[i].Text,
-                LinkedTaskId = drafts[i].LinkedTaskId,
-                SortOrder = i,
-                CreatedAt = checkIn.CreatedAt
-            });
+            AddCommitment(db, checkIn, week, drafts[i], i);
         }
     }
+
+    /// <summary>Adds one commitment row for a check-in at position <paramref name="sortOrder"/> (no save).</summary>
+    internal static void AddCommitment(LtfiDbContext db, ReflectionEntry checkIn, DateOnly week, CommitmentDraft draft, int sortOrder) =>
+        db.Commitments.Add(new WeeklyCommitment
+        {
+            CheckInId = checkIn.Id,
+            WeekStart = week,
+            Text = draft.Text,
+            LinkedTaskId = draft.LinkedTaskId,
+            SortOrder = sortOrder,
+            CreatedAt = checkIn.CreatedAt
+        });
 
     /// <summary>
     /// Marks a tracked commitment Kept and adds its <see cref="EvidenceType.CommitmentKept"/> item
@@ -301,7 +305,7 @@ public sealed class CommitmentService(
 
     private static string Metadata(Guid commitmentId) => $"{{\"commitmentId\":\"{commitmentId:D}\"}}";
 
-    private static async Task<IReadOnlyList<CommitmentLine>> ToLinesAsync(
+    internal static async Task<IReadOnlyList<CommitmentLine>> ToLinesAsync(
         LtfiDbContext db, List<WeeklyCommitment> rows, CancellationToken cancellationToken)
     {
         var ids = rows.Where(c => c.LinkedTaskId != null).Select(c => c.LinkedTaskId!.Value).Distinct().ToList();

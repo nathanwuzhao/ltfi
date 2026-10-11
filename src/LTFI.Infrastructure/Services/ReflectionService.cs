@@ -95,17 +95,47 @@ public sealed class ReflectionService(
         var existing = linkIds.Count == 0
             ? new HashSet<Guid>()
             : (await db.Tasks.Where(t => linkIds.Contains(t.Id)).Select(t => t.Id).ToListAsync(cancellationToken)).ToHashSet();
-        CommitmentService.AddCommitments(db, entry, WeeklyCheckIn.CommitmentWeekFor(reviewed), drafts
+        var cleaned = drafts
             .Select(d => d.LinkedTaskId is { } id && !existing.Contains(id) ? d with { LinkedTaskId = null } : d)
-            .ToList());
+            .ToList();
+
+        // A revision: commitments an earlier check-in for this same reviewed week made that are
+        // still in the form are updated in place (re-pointed at this check-in), so a Kept one stays
+        // Kept and nothing is duplicated. The rest are new rows.
+        var week = WeeklyCheckIn.CommitmentWeekFor(reviewed);
+        var prior = await db.Commitments
+            .Where(c => c.WeekStart == week && (c.Status == CommitmentStatus.Open || c.Status == CommitmentStatus.Kept))
+            .ToListAsync(cancellationToken);
+        var matches = WeeklyCommitments.MatchRevision(cleaned, prior.Select(c => (c.Id, c.Text)).ToList());
+        var reused = new HashSet<Guid>();
+        for (var i = 0; i < cleaned.Count; i++)
+        {
+            if (matches[i] is { } id)
+            {
+                var row = prior.First(c => c.Id == id);
+                row.CheckInId = entry.Id;
+                row.Text = cleaned[i].Text;
+                row.SortOrder = i;
+                row.CreatedAt = entry.CreatedAt;
+                if (row.Status == CommitmentStatus.Open)
+                {
+                    row.LinkedTaskId = cleaned[i].LinkedTaskId; // a Kept one keeps the link that kept it
+                }
+                reused.Add(id);
+            }
+            else
+            {
+                CommitmentService.AddCommitment(db, entry, week, cleaned[i], i);
+            }
+        }
 
         // Settle the commitments still open: those that applied to the reviewed week or earlier →
         // Kept (if chosen) or Missed; those made by an earlier check-in for this same reviewed week
-        // (they apply to next week) → Dropped, superseded by this one.
+        // (they apply to next week) and not carried into this one → Dropped, superseded by it.
         var open = await db.Commitments
             .Where(c => c.Status == CommitmentStatus.Open)
             .ToListAsync(cancellationToken);
-        foreach (var c in open.Where(c => c.CheckInId != entry.Id))
+        foreach (var c in open.Where(c => c.CheckInId != entry.Id && !reused.Contains(c.Id)))
         {
             if (c.WeekStart > reviewed)
             {
@@ -146,6 +176,24 @@ public sealed class ReflectionService(
 
     public async Task<WeeklyCheckInRecord?> GetLatestWeeklyCheckInAsync(CancellationToken cancellationToken = default) =>
         (await GetWeeklyCheckInHistoryAsync(1, cancellationToken)).FirstOrDefault();
+
+    public async Task<WeeklyCheckInRevision?> GetRevisionAsync(CancellationToken cancellationToken = default)
+    {
+        await using var db = await _contextFactory.CreateDbContextAsync(cancellationToken);
+        await CommitmentService.ReconcileAsync(db, _schedule, Zone, cancellationToken);
+
+        var entries = await WeeklyEntries(db).ToListAsync(cancellationToken);
+        var latest = entries.MaxBy(r => r.CreatedAt);
+        if (latest is null || !WeeklyCheckIn.Evaluate(ToLocal(latest.CreatedAt, Zone), Now, _schedule).IsRevision)
+        {
+            return null;
+        }
+
+        var rows = await db.Commitments.AsNoTracking()
+            .Where(c => c.CheckInId == latest.Id && c.Status != CommitmentStatus.Dropped)
+            .ToListAsync(cancellationToken);
+        return new WeeklyCheckInRevision(ToRecord(latest), await CommitmentService.ToLinesAsync(db, rows, cancellationToken));
+    }
 
     public async Task<IReadOnlyList<WeeklyCheckInRecord>> GetWeeklyCheckInHistoryAsync(
         int limit = 10, CancellationToken cancellationToken = default)

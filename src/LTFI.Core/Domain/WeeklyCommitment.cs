@@ -147,7 +147,51 @@ public static class WeeklyCommitments
 
         return list;
     }
+
+    /// <summary>
+    /// Pairs a revised check-in's commitments with the rows the earlier check-in for the same
+    /// reviewed week made (<paramref name="existing"/>), so a revision updates them in place instead
+    /// of duplicating them (and a Kept one stays Kept). A draft matches the row named by its
+    /// <see cref="CommitmentDraft.ExistingId"/> first, otherwise one with the same text (trimmed,
+    /// case-insensitive); each row is used at most once. Returns, per draft, the matched row id or null (new).
+    /// </summary>
+    public static IReadOnlyList<Guid?> MatchRevision(
+        IReadOnlyList<CommitmentDraft> drafts, IReadOnlyList<(Guid Id, string Text)> existing)
+    {
+        var result = new Guid?[drafts.Count];
+        var unused = existing.ToList();
+
+        for (var i = 0; i < drafts.Count; i++)
+        {
+            if (drafts[i].ExistingId is { } id && unused.FindIndex(e => e.Id == id) is var at and >= 0)
+            {
+                result[i] = id;
+                unused.RemoveAt(at);
+            }
+        }
+
+        for (var i = 0; i < drafts.Count; i++)
+        {
+            if (result[i] is not null)
+            {
+                continue;
+            }
+
+            var text = drafts[i].Text?.Trim() ?? string.Empty;
+            var at = unused.FindIndex(e => string.Equals(e.Text.Trim(), text, StringComparison.OrdinalIgnoreCase));
+            if (at >= 0)
+            {
+                result[i] = unused[at].Id;
+                unused.RemoveAt(at);
+            }
+        }
+
+        return result;
+    }
 }
 
-/// <summary>A commitment as typed on the check-in form, with an optional linked task.</summary>
-public sealed record CommitmentDraft(string Text, Guid? LinkedTaskId = null);
+/// <summary>
+/// A commitment as typed on the check-in form, with an optional linked task.
+/// <see cref="ExistingId"/>: the already-saved commitment this row was prefilled from when revising.
+/// </summary>
+public sealed record CommitmentDraft(string Text, Guid? LinkedTaskId = null, Guid? ExistingId = null);

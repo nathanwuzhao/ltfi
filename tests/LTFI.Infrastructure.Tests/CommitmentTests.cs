@@ -280,6 +280,92 @@ public sealed class CommitmentTests : IDisposable
         Assert.Equal(["A", "D"], (await commitments.GetCurrentWeekAsync()).Select(c => c.Text));
     }
 
+    [Fact]
+    public void Revision_matching_prefers_the_prefilled_id_then_the_same_text_once_each()
+    {
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        var c = Guid.NewGuid();
+        var existing = new List<(Guid, string)> { (a, "Gym"), (b, "Read"), (c, "Call mom") };
+
+        var matches = WeeklyCommitments.MatchRevision(
+            [
+                new CommitmentDraft("Gym 3x", ExistingId: a), // edited text, matched by id
+                new CommitmentDraft(" read "),                // same text, other case/space
+                new CommitmentDraft("Read"),                  // "Read" is used up → new
+                new CommitmentDraft("Ship", ExistingId: Guid.NewGuid()) // unknown id, no text match → new
+            ],
+            existing);
+
+        Assert.Equal([a, b, null, null], matches);
+    }
+
+    [Fact]
+    public async Task Revision_prefill_returns_the_submitted_answers_and_commitments_only_while_revisable()
+    {
+        var tasks = new TaskService(_factory, NewOutbox(), new RemindersSettings());
+        var task = await tasks.CreateAsync(new TaskDraft { Title = "Write report" });
+        var reflections = NewReflections();
+        Assert.Null(await reflections.GetRevisionAsync()); // nothing submitted yet
+
+        var record = await reflections.SaveWeeklyCheckInAsync(Answers(),
+            [new CommitmentDraft("Report", task.Id), new CommitmentDraft("Gym")]);
+
+        var revision = await reflections.GetRevisionAsync();
+        Assert.NotNull(revision);
+        Assert.Equal(record.Id, revision.CheckIn.Id);
+        Assert.Equal("shipped", revision.CheckIn.Answers[0].Answer);
+        Assert.Equal("earlier", revision.CheckIn.Answers[5].Answer);
+        Assert.Equal(["Report", "Gym"], revision.Commitments.Select(c => c.Text));
+        Assert.Equal(task.Id, revision.Commitments[0].LinkedTaskId);
+
+        // Sunday after the deadline / Monday: no longer revisable.
+        _clock.Now = Saturday.AddDays(2);
+        Assert.Null(await reflections.GetRevisionAsync());
+    }
+
+    [Fact]
+    public async Task Revising_with_prefilled_commitments_updates_them_in_place_and_keeps_kept()
+    {
+        var reflections = NewReflections();
+        var commitments = NewCommitments();
+        await reflections.SaveWeeklyCheckInAsync(Answers(),
+            [new CommitmentDraft("A"), new CommitmentDraft("B"), new CommitmentDraft("C")]);
+        var first = await PanelAsync(commitments);
+        await commitments.KeepAsync(first[0].Id);
+        Assert.Single(await KeptEvidenceAsync());
+
+        // Sunday: revise. A (kept) and B come back from the prefill (B edited); C is removed; D is new.
+        _clock.Now = Saturday.AddDays(1).AddHours(5);
+        var prefill = (await reflections.GetRevisionAsync())!;
+        Assert.True(prefill.Commitments[0].IsKept);
+        var revised = await reflections.SaveWeeklyCheckInAsync(Answers(),
+        [
+            new CommitmentDraft("A", ExistingId: prefill.Commitments[0].Id),
+            new CommitmentDraft("B, but smaller", ExistingId: prefill.Commitments[1].Id),
+            new CommitmentDraft("D")
+        ]);
+
+        var lines = await PanelAsync(commitments);
+        Assert.Equal(["A", "B, but smaller", "D"], lines.Select(c => c.Text));
+        Assert.Equal(first[0].Id, lines[0].Id);
+        Assert.Equal(first[1].Id, lines[1].Id);
+        Assert.Equal(CommitmentStatus.Kept, lines[0].Status);
+        Assert.All(lines, l => Assert.Equal(revised.Id, l.CheckInId));
+        Assert.Single(await KeptEvidenceAsync()); // no new evidence for A
+
+        await using (var db = _factory.CreateDbContext())
+        {
+            Assert.Equal(CommitmentStatus.Dropped, (await db.Commitments.SingleAsync(c => c.Id == first[2].Id)).Status);
+            Assert.Equal(4, await db.Commitments.CountAsync()); // nothing duplicated
+            // Still only the first check-in's evidence: a revision earns no points.
+            Assert.Single(await db.Evidence.Where(e => e.Type == EvidenceType.ReflectionSubmitted).ToListAsync());
+        }
+
+        // The prefill now reflects the revision.
+        Assert.Equal(["A", "B, but smaller", "D"], (await reflections.GetRevisionAsync())!.Commitments.Select(c => c.Text));
+    }
+
     // ---------------------------------------------------------------- backfill
 
     [Fact]
