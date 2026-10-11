@@ -61,6 +61,9 @@ public partial class ProjectsViewModel : ViewModelBase, IRefreshable
     private readonly List<Project> _allProjects = [];
     private bool _suppressSelectionLoad;
 
+    // A project another page asked to show (ShowProject); selected by the next RefreshAsync.
+    private Guid? _pendingSelectId;
+
     // A save that's blocked on the active-project limit, awaiting a pause/kill decision.
     private ProjectDraft? _pendingDraft;
     private Guid? _pendingUpdateId;
@@ -194,13 +197,43 @@ public partial class ProjectsViewModel : ViewModelBase, IRefreshable
 
     public bool CanManageMilestones => !IsCreatingNew && SelectedProject is not null;
 
+    /// <summary>
+    /// Selects <paramref name="projectId"/> (and loads it into the editor) on the next refresh,
+    /// which the navigation into this page triggers — so it lands on the freshly loaded list.
+    /// </summary>
+    public void ShowProject(Guid projectId) => _pendingSelectId = projectId;
+
     public async Task RefreshAsync()
     {
         var projects = await _projectService.GetAllAsync();
         ProjectBrushes.Remember(projects);
         _allProjects.Clear();
         _allProjects.AddRange(projects);
-        ApplyFilter();
+
+        if (_pendingSelectId is not { } showId)
+        {
+            ApplyFilter();
+            return;
+        }
+
+        _pendingSelectId = null;
+        if (!ShowArchived && _allProjects.FirstOrDefault(p => p.Id == showId) is { IsArchived: true })
+        {
+            ShowArchived = true; // re-filters so the archived project is in the list
+        }
+        else
+        {
+            ApplyFilter();
+        }
+
+        // ApplyFilter keeps the selection quietly; a requested project is loaded into the editor.
+        if (Projects.FirstOrDefault(p => p.Id == showId) is { } target)
+        {
+            _suppressSelectionLoad = true;
+            SelectedProject = target;
+            _suppressSelectionLoad = false;
+            LoadFromProject(target);
+        }
     }
 
     partial void OnShowArchivedChanged(bool value) => ApplyFilter();

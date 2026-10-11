@@ -39,6 +39,7 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
 
     private readonly Dictionary<Guid, string> _projectTitles = new();
     private readonly HashSet<Guid> _standingProjects = new(); // project-code colour: standing = neutral
+    private readonly Dictionary<Guid, Guid?> _taskProjects = new(); // task → project, for commitment row clicks
     private Guid? _selectedProjectId;
     private DateOnly? _selectedDay;
 
@@ -225,6 +226,18 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
 
     [RelayCommand]
     private void OpenCheckIn() => OpenCheckInRequested?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>
+    /// An UPCOMING / WEEKLY COMMITMENTS row was clicked: open its task in Tasks (a project target →
+    /// Projects), or with Ctrl the Focus page pre-filled for it. Rows without a target do nothing.
+    /// </summary>
+    public void OpenRow(IOpenableRow row, bool startFocus)
+    {
+        if (row.CanOpen)
+        {
+            _signals.RequestOpenItem(new OpenItemRequest(row.TaskId, row.ProjectId, startFocus));
+        }
+    }
 
     /// <summary>Marks an unlinked commitment kept (writes its evidence once), then reloads.</summary>
     [RelayCommand]
@@ -458,21 +471,27 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
     private async Task LoadDeadlinesAsync(IReadOnlyList<Project> projects)
     {
         var tasks = await _taskService.GetAllAsync();
-        var items = new List<(DateTimeOffset when, string item, IBrush brush)>();
+        _taskProjects.Clear();
+        foreach (var t in tasks)
+        {
+            _taskProjects[t.Id] = t.ProjectId;
+        }
+
+        var items = new List<(DateTimeOffset when, string item, IBrush brush, Guid? taskId, Guid? projectId)>();
 
         foreach (var t in tasks.Where(t =>
                      t.DueAt is not null && t.Status is not (TaskStatus.Completed or TaskStatus.Canceled)))
         {
-            items.Add((t.DueAt!.Value, t.Title, CcBrush.Secondary));
+            items.Add((t.DueAt!.Value, t.Title, CcBrush.Secondary, t.Id, t.ProjectId));
         }
         foreach (var p in projects.Where(p => p.TargetDate is not null && !p.IsArchived))
         {
-            items.Add((p.TargetDate!.Value, $"{Code(p.Title)} target", ProjectBrushes.For(p)));
+            items.Add((p.TargetDate!.Value, $"{Code(p.Title)} target", ProjectBrushes.For(p), null, p.Id));
         }
 
         var today = DateTimeOffset.Now.Date;
         Deadlines.Clear();
-        foreach (var (when, item, brush) in items.OrderBy(i => i.when).Take(6))
+        foreach (var (when, item, brush, taskId, projectId) in items.OrderBy(i => i.when).Take(6))
         {
             var days = (when.Date - today).Days;
             Deadlines.Add(new DeadlineRow
@@ -482,6 +501,8 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
                 Days = days < 0 ? $"{-days}d over" : days == 0 ? "today" : $"{days}d",
                 Dot = days <= 0 ? CcBrush.Red : days <= 3 ? CcBrush.Amber : CcBrush.Dim,
                 ItemBrush = brush,
+                TaskId = taskId,
+                ProjectId = projectId,
             });
         }
     }
@@ -564,6 +585,8 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
                 LinkTip = c.IsLinked
                     ? $"Linked to reminder “{c.LinkedTaskTitle ?? "?"}” — kept automatically when it's completed"
                     : null,
+                TaskId = c.LinkedTaskId,
+                ProjectId = c.LinkedTaskId is { } taskId ? _taskProjects.GetValueOrDefault(taskId) : null,
             });
         }
 
@@ -850,7 +873,25 @@ public partial class ProjectRow(Guid id) : ObservableObject
     public IBrush RowBg => IsSelected ? CcBrush.RowSelected : Brushes.Transparent;
 }
 
-public sealed class DeadlineRow
+/// <summary>
+/// A Command Center row that opens a task (Tasks page) or, with no task, a project (Projects page);
+/// Ctrl+click opens the Focus page pre-filled for it instead.
+/// </summary>
+public interface IOpenableRow
+{
+    Guid? TaskId { get; }
+    Guid? ProjectId { get; }
+    bool CanOpen { get; }
+}
+
+/// <summary>Tooltips for clickable Command Center rows.</summary>
+internal static class OpenRowTip
+{
+    public const string Task = "Click: open in Tasks · Ctrl+click: start focus";
+    public const string Project = "Click: open in Projects · Ctrl+click: start focus";
+}
+
+public sealed class DeadlineRow : IOpenableRow
 {
     public string Date { get; init; } = string.Empty;
     public string Item { get; init; } = string.Empty;
@@ -859,6 +900,13 @@ public sealed class DeadlineRow
 
     /// <summary>A project target is drawn in the project's colour; a task in the normal text colour.</summary>
     public IBrush ItemBrush { get; init; } = CcBrush.Secondary;
+
+    /// <summary>The due task; null for a project target (then <see cref="ProjectId"/> is the project).</summary>
+    public Guid? TaskId { get; init; }
+    public Guid? ProjectId { get; init; }
+
+    public bool CanOpen => TaskId is not null || ProjectId is not null;
+    public string? OpenTip => !CanOpen ? null : TaskId is null ? OpenRowTip.Project : OpenRowTip.Task;
 }
 
 public sealed class EvidenceRow
@@ -887,7 +935,7 @@ public sealed class DebtRow
 }
 
 /// <summary>One of this week's commitments on the Command Center.</summary>
-public sealed class CommitRow(Guid id)
+public sealed class CommitRow(Guid id) : IOpenableRow
 {
     public Guid Id { get; } = id;
     public string Text { get; init; } = string.Empty;
@@ -902,6 +950,16 @@ public sealed class CommitRow(Guid id)
     public bool CanCheck => !IsKept && !IsLinked;
     public bool ShowLinkMark => IsLinked && !IsKept;
     public bool IsOpen => !IsKept;
+
+    /// <summary>The linked reminder's task (null when unlinked: the row isn't clickable).</summary>
+    public Guid? TaskId { get; init; }
+    public Guid? ProjectId { get; init; }
+
+    public bool CanOpen => TaskId is not null;
+    public string? OpenTip => CanOpen ? OpenRowTip.Task : null;
+
+    /// <summary>The (possibly trimmed) text's tooltip; a clickable row also says what a click does.</summary>
+    public string TextTip => CanOpen ? $"{Text}\n{OpenRowTip.Task}" : Text;
 }
 
 public sealed class HeatCell
