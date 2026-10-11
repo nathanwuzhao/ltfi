@@ -114,12 +114,15 @@ public partial class MainWindowViewModel : ViewModelBase
         _focus_vm = focus;
         _focusNav = new NavItem("FOC", "Focus", focus);
 
+        var projectsNav = new NavItem("PRJ", "Projects", projects);
+        var tasksNav = new NavItem("TSK", "Tasks", tasks);
+
         NavItems =
         [
             new NavItem("CMD", "Command Center", command),
             new NavItem("TDY", "Today", today),
-            new NavItem("PRJ", "Projects", projects),
-            new NavItem("TSK", "Tasks", tasks),
+            projectsNav,
+            tasksNav,
             _focusNav,
             new NavItem("REV", "Review", review),
             _checkInNav,
@@ -138,6 +141,33 @@ public partial class MainWindowViewModel : ViewModelBase
         // Command Center's current-operation controls hand off to the Focus page.
         command.OpenFocusRequested += (_, _) => SelectedNav = _focusNav;
         command.OpenCheckInRequested += (_, _) => SelectedNav = _checkInNav;
+
+        // A clicked task/project row (Command Center UPCOMING / WEEKLY COMMITMENTS): the target
+        // page is told what to select first; the navigation's refresh then applies it to the
+        // freshly loaded list. Ctrl+click pre-fills the Focus page instead.
+        signals.OpenItemRequested += (_, request) =>
+        {
+            if (IsGated)
+            {
+                return;
+            }
+
+            if (request.StartFocus)
+            {
+                _focus_vm.PrepareFor(request.ProjectId, request.TaskId);
+                NavigateTo(_focusNav);
+            }
+            else if (request.TaskId is { } taskId)
+            {
+                tasks.ShowTask(taskId);
+                NavigateTo(tasksNav);
+            }
+            else if (request.ProjectId is { } projectId)
+            {
+                projects.ShowProject(projectId);
+                NavigateTo(projectsNav);
+            }
+        };
 
         // Submitting or snoozing the check-in lifts the gate (re-checked against the service).
         checkIn.GateCleared += (_, _) =>
@@ -192,6 +222,20 @@ public partial class MainWindowViewModel : ViewModelBase
 
         // Header numbers can change as the user acts on a page; re-read on every navigation.
         _ = RefreshHeaderAsync();
+    }
+
+    /// <summary>Shows <paramref name="nav"/>; if it is already showing, refreshes it so a pending
+    /// selection/prefill (ShowTask, ShowProject, PrepareFor) still gets applied.</summary>
+    private void NavigateTo(NavItem nav)
+    {
+        if (SelectedNav == nav && nav.ViewModel is IRefreshable refreshable)
+        {
+            _ = SafeRefreshAsync(refreshable);
+        }
+        else
+        {
+            SelectedNav = nav;
+        }
     }
 
     private void OnClockTick()

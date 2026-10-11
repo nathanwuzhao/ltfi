@@ -27,6 +27,17 @@
         <Style Selector="Border.cell.selected:pointerover">
             <Setter Property="BorderBrush" Value="#EEF1F5"/>
         </Style>
+
+        <!-- UPCOMING / COMMITMENTS rows with a task or project behind them: click → Tasks/Projects, Ctrl+click → Focus -->
+        <Style Selector="Border.openrow">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Border.openrow.clickable">
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="Border.openrow.clickable:pointerover">
+            <Setter Property="Background" Value="{DynamicResource BgHoverBrush}"/>
+        </Style>
     </UserControl.Styles>
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
@@ -341,13 +352,16 @@
                             <ItemsControl ItemsSource="{Binding Deadlines}" Margin="0,4">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:DeadlineRow">
-                                        <Grid ColumnDefinitions="Auto,44,*,Auto" Margin="11,5">
-                                            <Ellipse Width="5" Height="5" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{Binding Dot}"/>
-                                            <TextBlock Grid.Column="1" FontSize="10.5" VerticalAlignment="Center" Foreground="{DynamicResource TextBodyBrush}" Text="{Binding Date}"/>
-                                            <TextBlock Grid.Column="2" FontSize="10.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,6,0"
-                                                       Foreground="{Binding ItemBrush}" Text="{Binding Item}"/>
-                                            <TextBlock Grid.Column="3" FontSize="9.5" VerticalAlignment="Center" Foreground="{Binding Dot}" Text="{Binding Days}"/>
-                                        </Grid>
+                                        <Border Classes="openrow" Classes.clickable="{Binding CanOpen}" ToolTip.Tip="{Binding OpenTip}"
+                                                Tapped="OnOpenRowTapped">
+                                            <Grid ColumnDefinitions="Auto,44,*,Auto" Margin="11,5">
+                                                <Ellipse Width="5" Height="5" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{Binding Dot}"/>
+                                                <TextBlock Grid.Column="1" FontSize="10.5" VerticalAlignment="Center" Foreground="{DynamicResource TextBodyBrush}" Text="{Binding Date}"/>
+                                                <TextBlock Grid.Column="2" FontSize="10.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,6,0"
+                                                           Foreground="{Binding ItemBrush}" Text="{Binding Item}"/>
+                                                <TextBlock Grid.Column="3" FontSize="9.5" VerticalAlignment="Center" Foreground="{Binding Dot}" Text="{Binding Days}"/>
+                                            </Grid>
+                                        </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
@@ -373,29 +387,32 @@
                             <ItemsControl ItemsSource="{Binding Commitments}" Margin="0,4" IsVisible="{Binding HasCommitments}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:CommitRow">
-                                        <Grid ColumnDefinitions="28,*,Auto" Margin="11,4" MinHeight="22">
-                                            <!-- unlinked + open: a checkbox to mark kept (writes evidence; no un-keep) -->
-                                            <CheckBox IsVisible="{Binding CanCheck}" IsChecked="False" Padding="0" MinWidth="0" MinHeight="0"
-                                                      VerticalAlignment="Center" HorizontalAlignment="Left" ToolTip.Tip="Mark kept (+5 pts)"
-                                                      RenderTransform="scale(0.8)" RenderTransformOrigin="0%,50%"
-                                                      Command="{ReflectionBinding $parent[UserControl].DataContext.KeepCommitmentCommand}"
-                                                      CommandParameter="{Binding Id}"/>
-                                            <!-- linked + open: kept automatically when the reminder completes -->
-                                            <TextBlock IsVisible="{Binding ShowLinkMark}" FontSize="12" VerticalAlignment="Center"
-                                                       Foreground="{DynamicResource TextDimBrush}" Text="↪" ToolTip.Tip="{Binding LinkTip}"/>
-                                            <TextBlock IsVisible="{Binding IsKept}" FontSize="12" VerticalAlignment="Center"
-                                                       Foreground="{DynamicResource SuccessBrush}" Text="✓"/>
+                                        <Border Classes="openrow" Classes.clickable="{Binding CanOpen}" ToolTip.Tip="{Binding OpenTip}"
+                                                Tapped="OnOpenRowTapped">
+                                            <Grid ColumnDefinitions="28,*,Auto" Margin="11,4" MinHeight="22">
+                                                <!-- unlinked + open: a checkbox to mark kept (writes evidence; no un-keep) -->
+                                                <CheckBox IsVisible="{Binding CanCheck}" IsChecked="False" Padding="0" MinWidth="0" MinHeight="0"
+                                                          VerticalAlignment="Center" HorizontalAlignment="Left" ToolTip.Tip="Mark kept (+5 pts)"
+                                                          RenderTransform="scale(0.8)" RenderTransformOrigin="0%,50%"
+                                                          Command="{ReflectionBinding $parent[UserControl].DataContext.KeepCommitmentCommand}"
+                                                          CommandParameter="{Binding Id}"/>
+                                                <!-- linked + open: kept automatically when the reminder completes -->
+                                                <TextBlock IsVisible="{Binding ShowLinkMark}" FontSize="12" VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource TextDimBrush}" Text="↪" ToolTip.Tip="{Binding LinkTip}"/>
+                                                <TextBlock IsVisible="{Binding IsKept}" FontSize="12" VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource SuccessBrush}" Text="✓"/>
 
-                                            <TextBlock Grid.Column="1" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,6,0"
-                                                       Foreground="{DynamicResource TextBodyBrush}" Text="{Binding Text}" ToolTip.Tip="{Binding Text}"
-                                                       IsVisible="{Binding IsOpen}"/>
-                                            <TextBlock Grid.Column="1" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,6,0"
-                                                       Foreground="{DynamicResource SuccessBrush}" Opacity="0.55" TextDecorations="Strikethrough"
-                                                       Text="{Binding Text}" ToolTip.Tip="{Binding Text}" IsVisible="{Binding IsKept}"/>
+                                                <TextBlock Grid.Column="1" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,6,0"
+                                                           Foreground="{DynamicResource TextBodyBrush}" Text="{Binding Text}" ToolTip.Tip="{Binding TextTip}"
+                                                           IsVisible="{Binding IsOpen}"/>
+                                                <TextBlock Grid.Column="1" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,6,0"
+                                                           Foreground="{DynamicResource SuccessBrush}" Opacity="0.55" TextDecorations="Strikethrough"
+                                                           Text="{Binding Text}" ToolTip.Tip="{Binding TextTip}" IsVisible="{Binding IsKept}"/>
 
-                                            <TextBlock Grid.Column="2" FontSize="9" Classes="faint" VerticalAlignment="Center" Text="{Binding Meta}"
-                                                       ToolTip.Tip="{Binding LinkTip}"/>
-                                        </Grid>
+                                                <TextBlock Grid.Column="2" FontSize="9" Classes="faint" VerticalAlignment="Center" Text="{Binding Meta}"
+                                                           ToolTip.Tip="{Binding LinkTip}"/>
+                                            </Grid>
+                                        </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>

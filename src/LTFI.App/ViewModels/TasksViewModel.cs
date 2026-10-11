@@ -45,6 +45,9 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
     private int _areaLoadVersion;
     private bool _rebuildingRows;
 
+    // A task another page asked to show (ShowTask); selected by the next RefreshAsync.
+    private Guid? _pendingSelectId;
+
     /// <summary>The visible tasks in display order (no headers).</summary>
     public ObservableCollection<TaskItem> Tasks { get; } = [];
 
@@ -210,9 +213,17 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
 
     public bool HasExistingList => ExistingListText.Length > 0;
 
+    /// <summary>
+    /// Selects <paramref name="taskId"/> (editor loaded, list scrolled to it) on the next refresh,
+    /// which the navigation into this page triggers — so it lands on the freshly loaded list.
+    /// </summary>
+    public void ShowTask(Guid taskId) => _pendingSelectId = taskId;
+
     public async Task RefreshAsync()
     {
-        var selectedId = SelectedTask?.Id;
+        var selectedId = _pendingSelectId ?? SelectedTask?.Id;
+        var showRequested = _pendingSelectId is not null;
+        _pendingSelectId = null;
 
         var projects = await _projectService.GetAllAsync();
         ProjectBrushes.Remember(projects);
@@ -229,6 +240,14 @@ public partial class TasksViewModel : ViewModelBase, IRefreshable
         var tasks = await _taskService.GetAllAsync();
         _allTasks.Clear();
         _allTasks.AddRange(tasks);
+
+        // A requested task that's completed/canceled would be filtered out: show the archive.
+        if (showRequested && !ShowArchived && _allTasks.FirstOrDefault(t => t.Id == selectedId) is { } target
+            && IsArchived(target))
+        {
+            ShowArchived = true; // re-filters; the ApplyFilter below then selects the task
+        }
+
         ApplyFilter(selectedId);
     }
 

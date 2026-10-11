@@ -210,10 +210,11 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
     public bool ShowNsdr => IsNsdrRunning && !IsReviewing;
 
     /// <summary>
-    /// Pre-selects a project/task for the next session (used by Today's quick-start). Applied on the
-    /// next refresh, which the navigation into this page triggers. Ignored if a session is running.
+    /// Pre-selects a project/task for the next session (Today's quick-start, a Command Center
+    /// Ctrl+click; no task = just the project). Applied on the next refresh, which the navigation
+    /// into this page triggers. Ignored if a session is running.
     /// </summary>
-    public void PrepareFor(Guid? projectId, Guid taskId)
+    public void PrepareFor(Guid? projectId, Guid? taskId)
     {
         if (_focus.HasActiveSession)
         {
