@@ -66,7 +66,18 @@
                             <DataTemplate x:DataType="domain:TaskItem">
                                 <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="4">
                                     <StackPanel Spacing="4">
-                                        <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold"/>
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <!-- project tag in its identity colour -->
+                                            <TextBlock FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                       IsVisible="{Binding Project, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                       Foreground="{Binding Project, Converter={x:Static vm:ProjectBrushes.Brush}}"
+                                                       Text="{Binding Project, Converter={x:Static vm:ProjectBrushes.Code}}"
+                                                       ToolTip.Tip="{Binding Project.Title, FallbackValue=''}"/>
+                                            <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold"/>
+                                            <TextBlock Classes="faint" FontSize="11" VerticalAlignment="Center"
+                                                       IsVisible="{Binding Area, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                       Text="{Binding Area.Name, StringFormat='#{0}', FallbackValue=''}"/>
+                                        </StackPanel>
                                         <TextBlock Classes="muted" FontSize="12"
                                                    Text="{Binding Description, FallbackValue=''}"/>
                                     </StackPanel>

@@ -6,10 +6,16 @@ using System.Threading.Tasks;
 namespace LTFI.Core.Abstractions;
 
 /// <summary>Per-project activity over the review window.</summary>
-public sealed record ProjectActivityLine(string Title, TimeSpan FocusTime, int TasksCompleted);
+/// <remarks><see cref="ProjectId"/>/<see cref="IsStanding"/> only drive the project colour in the UI.</remarks>
+public sealed record ProjectActivityLine(
+    string Title,
+    TimeSpan FocusTime,
+    int TasksCompleted,
+    Guid? ProjectId = null,
+    bool IsStanding = false);
 
 /// <summary>An active project that hasn't seen activity recently (plan §3.4/§7.3).</summary>
-public sealed record StalledProjectLine(string Title, int DaysSinceActivity);
+public sealed record StalledProjectLine(string Title, int DaysSinceActivity, Guid? ProjectId = null);
 
 /// <summary>
 /// A deterministic, local-data weekly review (plan §3.6). No LLM — just counts and sums over the

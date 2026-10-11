@@ -103,6 +103,12 @@
                                 <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                                     <WrapPanel Orientation="Horizontal">
+                                        <!-- Project tag: code in the project's identity colour (name on hover) -->
+                                        <TextBlock FontSize="11" FontWeight="SemiBold" Margin="0,0,8,0" VerticalAlignment="Center"
+                                                   IsVisible="{Binding Project, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                   Foreground="{Binding Project, Converter={x:Static vm:ProjectBrushes.Brush}}"
+                                                   Text="{Binding Project, Converter={x:Static vm:ProjectBrushes.Code}}"
+                                                   ToolTip.Tip="{Binding Project.Title, FallbackValue=''}"/>
                                         <TextBlock Classes="muted" FontSize="12" Margin="0,0,8,0" Text="{Binding Priority}"/>
                                         <TextBlock Classes="muted" FontSize="12" Margin="0,0,8,0"
                                                    IsVisible="{Binding HasTimeSpent}"
@@ -183,7 +189,11 @@
                                       SelectedItem="{Binding SelectedProjectOption, Mode=TwoWay}">
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate x:DataType="vm:ProjectOption">
-                                        <TextBlock Text="{Binding Name}"/>
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Ellipse Width="7" Height="7" VerticalAlignment="Center"
+                                                     Fill="{Binding Converter={x:Static vm:ProjectBrushes.Brush}}"/>
+                                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                        </StackPanel>
                                     </DataTemplate>
                                 </ComboBox.ItemTemplate>
                             </ComboBox>

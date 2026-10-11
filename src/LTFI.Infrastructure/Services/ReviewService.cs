@@ -56,7 +56,9 @@ public sealed class ReviewService(IDbContextFactory<LtfiDbContext> contextFactor
             .Select(p => new ProjectActivityLine(
                 p.Title,
                 Sum(sessionsThisWeek.Where(s => s.ProjectId == p.Id).Select(s => s.Duration)),
-                completedThisWeek.Count(t => t.ProjectId == p.Id)))
+                completedThisWeek.Count(t => t.ProjectId == p.Id),
+                p.Id,
+                p.IsStanding))
             .OrderByDescending(l => l.FocusTime)
             .ToList();
 
@@ -71,7 +73,7 @@ public sealed class ReviewService(IDbContextFactory<LtfiDbContext> contextFactor
             var days = (int)(now - times.Max()).TotalDays;
             if (days > ProjectPolicy.StaleAfterDays)
             {
-                stalled.Add(new StalledProjectLine(p.Title, days));
+                stalled.Add(new StalledProjectLine(p.Title, days, p.Id));
             }
         }
 

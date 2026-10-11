@@ -54,6 +54,16 @@ public static class ProjectCodes
     public static string ColorFor(Guid projectId, bool isStanding = false) =>
         isStanding ? StandingColor : Palette[PaletteIndex(projectId)];
 
+    /// <summary>No project at all (e.g. "(No project)", evidence without one): the faint text colour.</summary>
+    public const string NoneColor = "#5B636F";
+
+    /// <summary>
+    /// <see cref="ColorFor(Guid, bool)"/> for an optional project: <see cref="NoneColor"/> when there is none.
+    /// The single rule every screen's project colour goes through.
+    /// </summary>
+    public static string ColorOrNone(Guid? projectId, bool isStanding = false) =>
+        projectId is { } id ? ColorFor(id, isStanding) : NoneColor;
+
     /// <summary>The palette slot for <paramref name="projectId"/>.</summary>
     public static int PaletteIndex(Guid projectId)
     {

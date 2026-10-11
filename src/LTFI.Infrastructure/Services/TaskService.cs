@@ -50,6 +50,7 @@ public sealed class TaskService(
             .AsNoTracking()
             .Include(t => t.Subtasks)
             .Include(t => t.Area)
+            .Include(t => t.Project) // read-only: the UI's project code/colour tag
             .ToListAsync(cancellationToken);
 
         await PopulateTimeSpentAsync(db, tasks, cancellationToken);
@@ -71,6 +72,7 @@ public sealed class TaskService(
             .AsNoTracking()
             .Include(t => t.Subtasks)
             .Include(t => t.Area)
+            .Include(t => t.Project) // read-only: the UI's project code/colour tag
             .Where(t => t.DueAt != null)
             .ToListAsync(cancellationToken);
 

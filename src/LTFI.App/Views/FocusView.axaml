@@ -45,7 +45,11 @@
                                   SelectedItem="{Binding SelectedProjectOption, Mode=TwoWay}">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate x:DataType="vm:ProjectOption">
-                                    <TextBlock Text="{Binding Name}"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Ellipse Width="7" Height="7" VerticalAlignment="Center"
+                                                 Fill="{Binding Converter={x:Static vm:ProjectBrushes.Brush}}"/>
+                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                    </StackPanel>
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>
@@ -53,12 +57,19 @@
 
                     <StackPanel Spacing="6">
                         <TextBlock Classes="muted" Text="Task"/>
+                        <!-- Only the selected project's open tasks (by #area); every open task when no project. -->
                         <ComboBox HorizontalAlignment="Stretch"
                                   ItemsSource="{Binding TaskOptions}"
                                   SelectedItem="{Binding SelectedTaskOption, Mode=TwoWay}">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate x:DataType="vm:TaskOption">
-                                    <TextBlock Text="{Binding Title}"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                   Foreground="{Binding CodeBrush}" Text="{Binding Code}" IsVisible="{Binding ShowCode}"/>
+                                        <TextBlock Classes="faint" FontSize="11" VerticalAlignment="Center"
+                                                   Text="{Binding AreaTag}" IsVisible="{Binding HasArea}"/>
+                                        <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
+                                    </StackPanel>
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>
@@ -115,7 +126,15 @@
                 <!-- Active: the running timer -->
                 <StackPanel Spacing="16" IsVisible="{Binding ShowActive}">
                     <TextBlock Classes="section-header" Text="CURRENT OPERATION"/>
-                    <c:WrapTextBlock Text="{Binding CurrentObjective}" FontSize="16" TextWrapping="Wrap"/>
+                    <StackPanel Spacing="6">
+                        <!-- the session's project, in its identity colour -->
+                        <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding HasActiveProject}">
+                            <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{Binding ActiveProjectBrush}"/>
+                            <TextBlock FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"
+                                       Foreground="{Binding ActiveProjectBrush}" Text="{Binding ActiveProjectName}"/>
+                        </StackPanel>
+                        <c:WrapTextBlock Text="{Binding CurrentObjective}" FontSize="16" TextWrapping="Wrap"/>
+                    </StackPanel>
 
                     <!-- Free mode: count up -->
                     <TextBlock Text="{Binding ElapsedText}" IsVisible="{Binding ShowFreeTimer}"

@@ -75,6 +75,15 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
     [ObservableProperty] private bool hasActiveSession;
     [ObservableProperty] private string clockText = "00:00";
     [ObservableProperty] private string opContext = "NO ACTIVE SESSION";
+
+    /// <summary>The running session's project code (empty when none), drawn in its colour before <see cref="OpContext"/>.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasOpCode))]
+    private string opCode = string.Empty;
+
+    [ObservableProperty] private IBrush opCodeBrush = CcBrush.Faint;
+
+    public bool HasOpCode => OpCode.Length > 0;
     [ObservableProperty] private string opTitle = "Start a focus session to begin an operation";
     [ObservableProperty] private string opIntent = string.Empty;
     [ObservableProperty] private bool isRunning;
@@ -109,6 +118,7 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
     [ObservableProperty] private bool showProgressPanel;
     [ObservableProperty] private int progPct;
     [ObservableProperty] private string progName = string.Empty;
+    [ObservableProperty] private IBrush progProjectBrush = CcBrush.Secondary;
     [ObservableProperty] private string progDelta = string.Empty;
     [ObservableProperty] private string progMilestone = "—";
     [ObservableProperty] private int progTargetPct;
@@ -310,6 +320,7 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
             {
                 Code = Code(p.Title),
                 Name = p.Title,
+                ProjectBrush = ProjectBrushes.For(p),
                 Dot = riskBrush,
                 HasProgress = p.HasProgress,
                 Pct = pct,
@@ -347,6 +358,7 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
             {
                 Dot = noEvidence ? CcBrush.Amber : CcBrush.Green,
                 Code = Code(a.Title),
+                ProjectBrush = ProjectBrushes.ForAny(a),
                 Logged = FormatHoursShort(a.FocusTime),
                 Note = noEvidence ? "logged, no completions" : $"{a.TasksCompleted} done",
                 NoteBrush = noEvidence ? CcBrush.Amber : CcBrush.Dim,
@@ -445,21 +457,21 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
     private async Task LoadDeadlinesAsync(IReadOnlyList<Project> projects)
     {
         var tasks = await _taskService.GetAllAsync();
-        var items = new List<(DateTimeOffset when, string item, string kind)>();
+        var items = new List<(DateTimeOffset when, string item, IBrush brush)>();
 
         foreach (var t in tasks.Where(t =>
                      t.DueAt is not null && t.Status is not (TaskStatus.Completed or TaskStatus.Canceled)))
         {
-            items.Add((t.DueAt!.Value, t.Title, "task"));
+            items.Add((t.DueAt!.Value, t.Title, CcBrush.Secondary));
         }
         foreach (var p in projects.Where(p => p.TargetDate is not null && !p.IsArchived))
         {
-            items.Add((p.TargetDate!.Value, $"{Code(p.Title)} target", "project"));
+            items.Add((p.TargetDate!.Value, $"{Code(p.Title)} target", ProjectBrushes.For(p)));
         }
 
         var today = DateTimeOffset.Now.Date;
         Deadlines.Clear();
-        foreach (var (when, item, _) in items.OrderBy(i => i.when).Take(6))
+        foreach (var (when, item, brush) in items.OrderBy(i => i.when).Take(6))
         {
             var days = (when.Date - today).Days;
             Deadlines.Add(new DeadlineRow
@@ -468,6 +480,7 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
                 Item = item,
                 Days = days < 0 ? $"{-days}d over" : days == 0 ? "today" : $"{days}d",
                 Dot = days <= 0 ? CcBrush.Red : days <= 3 ? CcBrush.Amber : CcBrush.Dim,
+                ItemBrush = brush,
             });
         }
     }
@@ -590,6 +603,7 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
         var brush = row?.RiskBrush ?? CcBrush.Green;
 
         ProgName = project.Title;
+        ProgProjectBrush = ProjectBrushes.For(project);
         ProgPct = pct;
         ProgBrush = brush;
         ProgTargetPct = Math.Min(100, (pct / 25 + 1) * 25);
@@ -690,6 +704,7 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
             HasActiveSession = false;
             IsRunning = false;
             ClockText = FormatCountdown(rest.Remaining);
+            OpCode = string.Empty;
             OpContext = "NSDR · RESTING";
             OpTitle = "Non-sleep deep rest";
             OpIntent = rest.Cue.Title.ToLowerInvariant();
@@ -702,6 +717,7 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
             HasActiveSession = false;
             IsRunning = false;
             ClockText = "00:00";
+            OpCode = string.Empty;
             OpContext = "NO ACTIVE SESSION";
             OpTitle = "Start a focus session to begin an operation";
             OpIntent = string.Empty;
@@ -714,8 +730,11 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
         RunLabel = IsRunning ? "PAUSE" : "RESUME";
         ClockText = FormatClock(s.Elapsed);
 
-        var code = s.ProjectId is { } pid && _projectTitles.TryGetValue(pid, out var pt) ? Code(pt) : "—";
-        OpContext = $"{code} · {(IsRunning ? "RUNNING" : "PAUSED")}";
+        // The project code is its own text run (in the project's colour); OpContext is the rest.
+        var known = s.ProjectId is { } pid && _projectTitles.ContainsKey(pid);
+        OpCode = known ? Code(_projectTitles[s.ProjectId!.Value]) : ProjectCodes.None;
+        OpCodeBrush = known ? ProjectBrushFor(s.ProjectId) : CcBrush.Faint;
+        OpContext = $"· {(IsRunning ? "RUNNING" : "PAUSED")}";
         OpTitle = s.TaskTitle ?? s.Intent ?? "Focused work";
         OpIntent = string.IsNullOrWhiteSpace(s.Intent) ? string.Empty : $"intent — {s.Intent}";
 
@@ -726,7 +745,7 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
             var phase = pomo.IsBreakOver ? "BREAK OVER"
                 : pomo.IsWorkPaused ? "WORK · PAUSED"
                 : pomo.PhaseLabel;
-            OpContext = $"{code} · {phase} · {pomo.Dots}";
+            OpContext = $"· {phase} · {pomo.Dots}";
             RunLabel = pomo.IsBreakOver ? "START NEXT"
                 : pomo.IsBreak ? (pomo.Phase == PomodoroPhase.Nsdr ? "END NSDR" : "SKIP BREAK")
                 : RunLabel;
@@ -761,9 +780,7 @@ public partial class CommandCenterViewModel : ViewModelBase, IRefreshable
 
     /// <summary>The project's stable colour (by id; standing projects neutral); dim for no project.</summary>
     private IBrush ProjectBrushFor(Guid? projectId) =>
-        projectId is { } id
-            ? ProjectBrushes.For(ProjectCodes.ColorFor(id, _standingProjects.Contains(id)))
-            : CcBrush.Faint;
+        ProjectBrushes.For(projectId, projectId is { } id && _standingProjects.Contains(id));
 
     private static string TypeTag(EvidenceType type) => type switch
     {
@@ -812,6 +829,9 @@ public partial class ProjectRow(Guid id) : ObservableObject
     public string Name { get; init; } = string.Empty;
     public IBrush Dot { get; init; } = CcBrush.Dim;
 
+    /// <summary>Identity colour for the code (<see cref="ProjectBrushes"/>); <see cref="Dot"/>/<see cref="RiskBrush"/> stay status.</summary>
+    public IBrush ProjectBrush { get; init; } = CcBrush.Body;
+
     /// <summary>False for standing projects: no bar and no %, a STANDING tag instead.</summary>
     public bool HasProgress { get; init; } = true;
     public int Pct { get; init; }
@@ -835,6 +855,9 @@ public sealed class DeadlineRow
     public string Item { get; init; } = string.Empty;
     public string Days { get; init; } = string.Empty;
     public IBrush Dot { get; init; } = CcBrush.Dim;
+
+    /// <summary>A project target is drawn in the project's colour; a task in the normal text colour.</summary>
+    public IBrush ItemBrush { get; init; } = CcBrush.Secondary;
 }
 
 public sealed class EvidenceRow
@@ -850,30 +873,13 @@ public sealed class EvidenceRow
     public string Text { get; init; } = string.Empty;
 }
 
-/// <summary>Frozen brushes for <see cref="ProjectCodes"/> colours, cached per hex value.</summary>
-internal static class ProjectBrushes
-{
-    private static readonly Dictionary<string, IBrush> Cache = new(StringComparer.OrdinalIgnoreCase);
-
-    public static IBrush For(string hex)
-    {
-        lock (Cache)
-        {
-            if (!Cache.TryGetValue(hex, out var brush))
-            {
-                brush = new SolidColorBrush(Color.Parse(hex)).ToImmutable();
-                Cache[hex] = brush;
-            }
-
-            return brush;
-        }
-    }
-}
-
 public sealed class DebtRow
 {
     public IBrush Dot { get; init; } = CcBrush.Green;
     public string Code { get; init; } = string.Empty;
+
+    /// <summary>The project's identity colour for <see cref="Code"/> (<see cref="ProjectBrushes"/>).</summary>
+    public IBrush ProjectBrush { get; init; } = CcBrush.Body;
     public string Logged { get; init; } = string.Empty;
     public string Note { get; init; } = string.Empty;
     public IBrush NoteBrush { get; init; } = CcBrush.Dim;
@@ -932,6 +938,7 @@ internal static class CcBrush
     public static readonly IBrush Amber = B(0xE6, 0xA1, 0x3A);
     public static readonly IBrush Red = B(0xE5, 0x48, 0x4D);
     public static readonly IBrush Body = B(0xC7, 0xCD, 0xD6);
+    public static readonly IBrush Secondary = B(0xAA, 0xB1, 0xBE);
     public static readonly IBrush Dim = B(0x7A, 0x82, 0x8F);
     public static readonly IBrush Faint = B(0x5B, 0x63, 0x6F);
     public static readonly IBrush RowSelected = B(0x15, 0x1B, 0x24);

@@ -73,10 +73,12 @@ public partial class ProjectsViewModel : ViewModelBase, IRefreshable
     [NotifyCanExecuteChangedFor(nameof(AddMilestoneCommand))]
     [NotifyCanExecuteChangedFor(nameof(AddAreaCommand))]
     [NotifyPropertyChangedFor(nameof(CanManageMilestones))]
+    [NotifyPropertyChangedFor(nameof(ShowEditorIdentity))]
     private Project? selectedProject;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(EditorTitle))]
+    [NotifyPropertyChangedFor(nameof(ShowEditorIdentity))]
     [NotifyPropertyChangedFor(nameof(SaveButtonText))]
     [NotifyPropertyChangedFor(nameof(CanManageMilestones))]
     [NotifyCanExecuteChangedFor(nameof(AddMilestoneCommand))]
@@ -114,6 +116,9 @@ public partial class ProjectsViewModel : ViewModelBase, IRefreshable
     }
 
     public string EditorTitle => IsCreatingNew ? "New Project" : "Edit Project";
+
+    /// <summary>The editor header names the project being edited, in its identity colour.</summary>
+    public bool ShowEditorIdentity => !IsCreatingNew && SelectedProject is not null;
 
     public string SaveButtonText => IsCreatingNew ? "Create Project" : "Save Changes";
 

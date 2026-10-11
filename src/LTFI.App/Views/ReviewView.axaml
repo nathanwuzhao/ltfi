@@ -60,7 +60,9 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="abs:ProjectActivityLine">
                             <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,4">
-                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                                <!-- project name in its identity colour (standing = neutral grey) -->
+                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
+                                           Foreground="{Binding Converter={x:Static vm:ProjectBrushes.Brush}}"/>
                                 <TextBlock Grid.Column="1" Classes="muted" Margin="0,0,16,0"
                                            Text="{Binding FocusTime, Converter={StaticResource DurationToClock}}"/>
                                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
@@ -82,7 +84,8 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="abs:StalledProjectLine">
                             <Grid ColumnDefinitions="*,Auto" Margin="0,4">
-                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
+                                           Foreground="{Binding Converter={x:Static vm:ProjectBrushes.Brush}}"/>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
                                     <TextBlock Foreground="{DynamicResource WarningBrush}" Text="{Binding DaysSinceActivity}"/>
                                     <TextBlock Foreground="{DynamicResource WarningBrush}" Text="days idle"/>

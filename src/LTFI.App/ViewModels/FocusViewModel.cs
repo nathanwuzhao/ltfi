@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
@@ -19,8 +20,20 @@ using TaskStatus = LTFI.Core.Domain.TaskStatus;
 
 namespace LTFI.ViewModels;
 
-/// <summary>A task choice for starting a focus session; <c>Id == null</c> means "no task".</summary>
-public sealed record TaskOption(Guid? Id, string Title);
+/// <summary>
+/// A task choice for starting a focus session; <c>Id == null</c> means "no task". Labelled with its
+/// <c>#area</c>, and — when no project is selected — its project code in the project's colour.
+/// </summary>
+public sealed record TaskOption(Guid? Id, string Title, Guid? ProjectId = null, string? Area = null)
+{
+    public string AreaTag => string.IsNullOrWhiteSpace(Area) ? string.Empty : $"#{Area}";
+    public bool HasArea => AreaTag.Length > 0;
+
+    /// <summary>The project code, set only while the picker lists every project's tasks.</summary>
+    public string Code { get; init; } = string.Empty;
+    public IBrush CodeBrush { get; init; } = CcBrush.Faint;
+    public bool ShowCode => Code.Length > 0;
+}
 
 /// <summary>
 /// The Focus page: pick what to work on, run a timer — pomodoro countdown (default) or free
@@ -51,6 +64,12 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
     private Guid? _pendingProjectId;
     private Guid? _pendingTaskId;
     private bool _hasPendingPrefill;
+
+    /// <summary>Every open task (with Project/Area loaded); the picker shows a filtered view of it.</summary>
+    private readonly List<TaskItem> _openTasks = [];
+
+    /// <summary>Set while the option lists are rebuilt: ComboBoxes push null back as their items clear.</summary>
+    private bool _syncingPicker;
     private bool _ticking;
     private bool _resumeAfterReview;
 
@@ -80,6 +99,15 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
     [ObservableProperty] private bool isRunning;
     [ObservableProperty] private string elapsedText = "00:00";
     [ObservableProperty] private string currentObjective = string.Empty;
+
+    /// <summary>The running session's project (name in its identity colour); empty when none.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasActiveProject))]
+    private string activeProjectName = string.Empty;
+
+    [ObservableProperty] private IBrush activeProjectBrush = CcBrush.Faint;
+
+    public bool HasActiveProject => ActiveProjectName.Length > 0;
     [ObservableProperty] private string pauseResumeText = "Pause";
 
     // --- pomodoro (active session in pomodoro mode) ---
@@ -199,35 +227,111 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
 
     public async Task RefreshAsync()
     {
+        // Today's quick-start prefill wins; otherwise keep what was picked (by id: the lists are rebuilt).
+        var keepProjectId = _hasPendingPrefill ? _pendingProjectId : SelectedProjectOption?.Id;
+        var keepTaskId = _hasPendingPrefill ? _pendingTaskId : SelectedTaskOption?.Id;
+        _hasPendingPrefill = false;
+
         var projects = await _projectService.GetAllAsync();
-        ProjectOptions.Clear();
-        ProjectOptions.Add(new ProjectOption(null, "(No project)"));
-        foreach (var p in projects)
-        {
-            ProjectOptions.Add(new ProjectOption(p.Id, p.Title));
-        }
-
         var tasks = await _taskService.GetAllAsync();
-        TaskOptions.Clear();
-        TaskOptions.Add(new TaskOption(null, "(No task)"));
-        foreach (var t in tasks.Where(t => t.Status is not (TaskStatus.Completed or TaskStatus.Canceled)))
+
+        _syncingPicker = true;
+        try
         {
-            TaskOptions.Add(new TaskOption(t.Id, t.Title));
+            ProjectOptions.Clear();
+            ProjectOptions.Add(new ProjectOption(null, "(No project)"));
+            foreach (var p in projects)
+            {
+                ProjectOptions.Add(new ProjectOption(p.Id, p.Title, p.IsStanding));
+            }
+
+            _openTasks.Clear();
+            _openTasks.AddRange(tasks.Where(t => t.IsOpen));
+
+            SelectedProjectOption = null; // re-point the ComboBox at the new list's instance
+            SelectedProjectOption = ProjectOptions.FirstOrDefault(o => o.Id == keepProjectId) ?? ProjectOptions[0];
+            RebuildTaskOptions(keepTaskId);
+        }
+        finally
+        {
+            _syncingPicker = false;
         }
 
-        if (_hasPendingPrefill)
-        {
-            SelectedProjectOption = ProjectOptions.FirstOrDefault(o => o.Id == _pendingProjectId) ?? ProjectOptions.FirstOrDefault();
-            SelectedTaskOption = TaskOptions.FirstOrDefault(o => o.Id == _pendingTaskId) ?? TaskOptions.FirstOrDefault();
-            _hasPendingPrefill = false;
-        }
-        else
-        {
-            SelectedProjectOption ??= ProjectOptions.FirstOrDefault();
-            SelectedTaskOption ??= TaskOptions.FirstOrDefault();
-        }
+        // A prefilled (or kept) task with no project selected brings its project along.
+        AdoptSelectedTaskProject();
 
         SyncFromService();
+    }
+
+    // Project changed → the task list narrows to that project; a task that isn't its is cleared.
+    partial void OnSelectedProjectOptionChanged(ProjectOption? value)
+    {
+        if (_syncingPicker)
+        {
+            return;
+        }
+
+        RebuildTaskOptions(SelectedTaskOption?.Id);
+    }
+
+    // Task picked with no project selected → select the task's project (which keeps the task).
+    partial void OnSelectedTaskOptionChanged(TaskOption? value)
+    {
+        if (_syncingPicker || value?.ProjectId is null || SelectedProjectOption?.Id is not null)
+        {
+            return;
+        }
+
+        // Posted: this runs inside the task ComboBox's own selection change, and rebuilding its
+        // items right here leaves it showing nothing.
+        Dispatcher.UIThread.Post(AdoptSelectedTaskProject);
+    }
+
+    /// <summary>
+    /// Refills <see cref="TaskOptions"/> for the selected project (<see cref="FocusTaskPicker"/>) and
+    /// re-selects <paramref name="keepTaskId"/> if it is still offered, else "(No task)".
+    /// </summary>
+    private void RebuildTaskOptions(Guid? keepTaskId)
+    {
+        var wasSyncing = _syncingPicker;
+        _syncingPicker = true;
+        try
+        {
+            var projectId = SelectedProjectOption?.Id;
+            TaskOptions.Clear();
+            TaskOptions.Add(new TaskOption(null, "(No task)"));
+            foreach (var t in FocusTaskPicker.Options(_openTasks, projectId))
+            {
+                TaskOptions.Add(new TaskOption(t.Id, t.Title, t.ProjectId, t.Area?.Name)
+                {
+                    // With every project's tasks listed, tag each with its project.
+                    Code = projectId is null && t.Project is { } p ? ProjectCodes.Code(p.Title) : string.Empty,
+                    CodeBrush = ProjectBrushes.For(t.Project),
+                });
+            }
+
+            var keep = keepTaskId is null ? null : TaskOptions.FirstOrDefault(o => o.Id == keepTaskId);
+            // Null first so the ComboBox is re-pointed at the new list's instance.
+            SelectedTaskOption = null;
+            SelectedTaskOption = keep ?? TaskOptions[0];
+        }
+        finally
+        {
+            _syncingPicker = wasSyncing;
+        }
+    }
+
+    private void AdoptSelectedTaskProject()
+    {
+        if (SelectedProjectOption?.Id is not null || SelectedTaskOption?.ProjectId is not { } projectId)
+        {
+            return;
+        }
+
+        if (ProjectOptions.FirstOrDefault(o => o.Id == projectId) is { } option)
+        {
+            SelectedProjectOption = option; // → RebuildTaskOptions keeps the task (it belongs)
+        }
     }
 
     [RelayCommand] private void UsePomodoro() => TimerMode = FocusTimerMode.Pomodoro;
@@ -612,6 +716,7 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
             IsRunning = false;
             ElapsedText = "00:00";
             CurrentObjective = string.Empty;
+            ActiveProjectName = string.Empty;
             return;
         }
 
@@ -620,6 +725,9 @@ public partial class FocusViewModel : ViewModelBase, IRefreshable
         PauseResumeText = IsRunning ? "Pause" : "Resume";
         ElapsedText = Format(snapshot.Elapsed);
         CurrentObjective = BuildObjective(snapshot);
+        var project = snapshot.ProjectId is { } pid ? ProjectOptions.FirstOrDefault(o => o.Id == pid) : null;
+        ActiveProjectName = project?.Name ?? string.Empty;
+        ActiveProjectBrush = ProjectBrushes.ForAny(project);
 
         IsPomodoroActive = pomo is not null;
         // NSDR 10:00 in the session: any work interval, any break (the long break's TAKE NSDR

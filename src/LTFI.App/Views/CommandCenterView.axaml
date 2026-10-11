@@ -150,7 +150,12 @@
                                 <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
                                     <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{Binding ProgBrush}"/>
                                     <TextBlock Grid.Column="1" Classes="micro" Text="CURRENT OPERATION" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="3" Classes="micro-dim" Text="{Binding OpContext}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <!-- project code (identity colour) · state -->
+                                    <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" Margin="0,0,8,0">
+                                        <TextBlock Classes="micro" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                   Foreground="{Binding OpCodeBrush}" Text="{Binding OpCode}" IsVisible="{Binding HasOpCode}"/>
+                                        <TextBlock Classes="micro-dim" Text="{Binding OpContext}" VerticalAlignment="Center"/>
+                                    </StackPanel>
                                     <TextBlock Grid.Column="4" Classes="faint" FontSize="10" Text="{Binding OpsCaret}" VerticalAlignment="Center"/>
                                 </Grid>
                             </Button>
@@ -195,7 +200,7 @@
                                                 <Grid ColumnDefinitions="Auto,86,*,150,44,84">
                                                     <Ellipse Width="7" Height="7" VerticalAlignment="Center" Margin="0,0,10,0" Fill="{Binding Dot}"/>
                                                     <TextBlock Grid.Column="1" FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center"
-                                                               Foreground="{DynamicResource TextBodyBrush}" Text="{Binding Code}"/>
+                                                               Foreground="{Binding ProjectBrush}" Text="{Binding Code}"/>
                                                     <TextBlock Grid.Column="2" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,8,0"
                                                                Foreground="{DynamicResource TextSecondaryBrush}" Text="{Binding Name}"/>
                                                     <!-- bar | fixed-width right-aligned % beside it (never drawn over the bar;
@@ -315,7 +320,7 @@
                                             <DataTemplate x:DataType="vm:DebtRow">
                                                 <Grid ColumnDefinitions="Auto,64,40,*" Margin="0,3,0,0">
                                                     <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,7,0" Fill="{Binding Dot}"/>
-                                                    <TextBlock Grid.Column="1" FontSize="10" Foreground="{DynamicResource TextBodyBrush}" TextTrimming="CharacterEllipsis" Text="{Binding Code}"/>
+                                                    <TextBlock Grid.Column="1" FontSize="10" Foreground="{Binding ProjectBrush}" TextTrimming="CharacterEllipsis" Text="{Binding Code}"/>
                                                     <TextBlock Grid.Column="2" FontSize="10" Classes="muted" Text="{Binding Logged}"/>
                                                     <TextBlock Grid.Column="3" FontSize="10" Foreground="{Binding NoteBrush}" TextTrimming="CharacterEllipsis" Text="{Binding Note}"/>
                                                 </Grid>
@@ -340,7 +345,7 @@
                                             <Ellipse Width="5" Height="5" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{Binding Dot}"/>
                                             <TextBlock Grid.Column="1" FontSize="10.5" VerticalAlignment="Center" Foreground="{DynamicResource TextBodyBrush}" Text="{Binding Date}"/>
                                             <TextBlock Grid.Column="2" FontSize="10.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,6,0"
-                                                       Foreground="{DynamicResource TextSecondaryBrush}" Text="{Binding Item}"/>
+                                                       Foreground="{Binding ItemBrush}" Text="{Binding Item}"/>
                                             <TextBlock Grid.Column="3" FontSize="9.5" VerticalAlignment="Center" Foreground="{Binding Dot}" Text="{Binding Days}"/>
                                         </Grid>
                                     </DataTemplate>
@@ -422,7 +427,8 @@
                                         <Button Classes="row" Command="{ReflectionBinding $parent[UserControl].DataContext.SelectProjectCommand}" CommandParameter="{Binding Id}">
                                             <Border Background="{Binding RowBg}" CornerRadius="3" Padding="8,3"
                                                     BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1">
-                                                <TextBlock FontSize="9" LetterSpacing="0.4" FontWeight="SemiBold" Foreground="{Binding RiskBrush}" Text="{Binding Code}"/>
+                                                <!-- identity colour for the code; the risk/status colour stays on the row dot and % -->
+                                                <TextBlock FontSize="9" LetterSpacing="0.4" FontWeight="SemiBold" Foreground="{Binding ProjectBrush}" Text="{Binding Code}"/>
                                             </Border>
                                         </Button>
                                     </DataTemplate>
@@ -441,7 +447,7 @@
                                     <TextBlock.Text><Binding Path="ProgPct" StringFormat="{}{0}%"/></TextBlock.Text>
                                 </TextBlock>
                                 <TextBlock Grid.Column="1" FontSize="11" Margin="11,0,9,0" VerticalAlignment="Bottom" TextTrimming="CharacterEllipsis"
-                                           Foreground="{DynamicResource TextSecondaryBrush}" Text="{Binding ProgName}"/>
+                                           Foreground="{Binding ProgProjectBrush}" Text="{Binding ProgName}"/>
                                 <TextBlock Grid.Column="2" Classes="faint" FontSize="9" Margin="0,0,9,0" VerticalAlignment="Bottom">
                                     <TextBlock.Text>
                                         <MultiBinding StringFormat="→ {0} ({1}%)">

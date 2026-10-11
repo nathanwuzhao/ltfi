@@ -32,10 +32,17 @@
                          SelectedItem="{Binding SelectedProject, Mode=TwoWay}">
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="domain:Project">
-                            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Margin="2">
-                                <StackPanel Spacing="3">
+                            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto" Margin="2">
+                                <!-- identity swatch: the project's stable colour (standing = neutral grey) -->
+                                <Border Grid.RowSpan="2" Width="3" CornerRadius="1.5" Margin="0,2,10,2"
+                                        Background="{Binding Converter={x:Static vm:ProjectBrushes.Brush}}"/>
+                                <StackPanel Grid.Column="1" Spacing="3">
                                     <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
+                                                   Foreground="{Binding Converter={x:Static vm:ProjectBrushes.Brush}}"/>
+                                        <!-- the 4-char code the Command Center / Tasks tags use -->
+                                        <TextBlock Classes="faint" FontSize="10" VerticalAlignment="Center"
+                                                   Text="{Binding Converter={x:Static vm:ProjectBrushes.Code}}"/>
                                         <TextBlock Classes="faint" FontSize="11" VerticalAlignment="Center"
                                                    Text="STANDING" IsVisible="{Binding IsStanding}"/>
                                     </StackPanel>
@@ -43,10 +50,10 @@
                                                Text="{Binding Description, FallbackValue=''}"
                                                ToolTip.Tip="{Binding Description}"/>
                                 </StackPanel>
-                                <Border Grid.Column="1" Classes="chip">
+                                <Border Grid.Column="2" Classes="chip">
                                     <TextBlock Text="{Binding Status}"/>
                                 </Border>
-                                <ProgressBar Grid.Row="1" Grid.ColumnSpan="2"
+                                <ProgressBar Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
                                              Margin="0,8,0,0" Height="4" Maximum="100" MinWidth="0"
                                              IsVisible="{Binding HasProgress}"
                                              Value="{Binding ProgressPercent, TargetNullValue=0}"/>
@@ -61,7 +68,19 @@
         <Border Grid.Row="1" Grid.Column="1" Classes="card" Margin="0,18,0,0">
             <ScrollViewer HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Spacing="14">
-                    <TextBlock Classes="page-title" FontSize="20" Text="{Binding EditorTitle}"/>
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="page-title" FontSize="20" Text="{Binding EditorTitle}"/>
+                        <!-- which project: swatch + name in its identity colour, and its code -->
+                        <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding ShowEditorIdentity}">
+                            <Border Width="3" Height="14" CornerRadius="1.5" VerticalAlignment="Center"
+                                    Background="{Binding SelectedProject, Converter={x:Static vm:ProjectBrushes.Brush}}"/>
+                            <TextBlock FontWeight="SemiBold" VerticalAlignment="Center"
+                                       Foreground="{Binding SelectedProject, Converter={x:Static vm:ProjectBrushes.Brush}}"
+                                       Text="{Binding SelectedProject.Title, FallbackValue=''}"/>
+                            <TextBlock Classes="faint" FontSize="10" VerticalAlignment="Center"
+                                       Text="{Binding SelectedProject, Converter={x:Static vm:ProjectBrushes.Code}}"/>
+                        </StackPanel>
+                    </StackPanel>
 
                     <!-- Active-project-limit decision -->
                     <Border Classes="card"
