@@ -26,6 +26,12 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly DispatcherTimer _clock;
     private int _tick;
 
+    /// <summary>Set while the header SYNC runs; it refreshes the page itself afterwards.</summary>
+    private bool _isManualSync;
+
+    /// <summary>The shared reminders mirror: the header binds its SYNCING… flag and "SYNCED HH:mm" readout.</summary>
+    public RemindersPanelViewModel Reminders => _reminders;
+
     public ObservableCollection<NavItem> NavItems { get; }
     public NavItem SettingsNav { get; }
 
@@ -140,15 +146,16 @@ public partial class MainWindowViewModel : ViewModelBase
             _ = RefreshHeaderAsync();
         };
 
-        // A reminders sync that changed data (new tasks, iPhone completions → evidence/points)
-        // re-reads the header and the read-only overview pages. Tasks is left alone so an
-        // in-progress edit there isn't clobbered.
+        // A reminders sync that changed data (new tasks, iPhone completions → evidence/points),
+        // whether the 15s background check or a SYNC button, re-reads the header and the visible
+        // page (see RefreshPageAfterSyncAsync for what each page keeps).
         reminders.Synced += (_, _) =>
         {
-            if (CurrentViewModel is (TodayViewModel or CommandCenterViewModel) and IRefreshable page)
+            if (_isManualSync)
             {
-                _ = SafeRefreshAsync(page);
+                return;
             }
+            _ = RefreshPageAfterSyncAsync();
             _ = RefreshHeaderAsync();
         };
 
@@ -267,6 +274,40 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Header SYNC: the full reminders sync (outbox flush + re-read of the export, same as the Today
+    /// panel's button), then a refresh of whatever page is showing even when nothing changed —
+    /// a sanity check that the page matches the phone.
+    /// </summary>
+    [RelayCommand]
+    private async Task SyncNowAsync()
+    {
+        _isManualSync = true;
+        try
+        {
+            await _reminders.SyncCommand.ExecuteAsync(null);
+        }
+        finally
+        {
+            _isManualSync = false;
+        }
+
+        await RefreshPageAfterSyncAsync();
+        await RefreshHeaderAsync();
+    }
+
+    /// <summary>
+    /// Re-reads the visible page after a reminders sync. Tasks reloads its list only, so an unsaved
+    /// edit in its editor survives; Check-In is skipped so typed answers aren't reset.
+    /// </summary>
+    private Task RefreshPageAfterSyncAsync() => CurrentViewModel switch
+    {
+        TasksViewModel tasks => SafeRefreshAsync(tasks, tasks.RefreshListAsync),
+        CheckInViewModel => Task.CompletedTask,
+        IRefreshable page => SafeRefreshAsync(page),
+        _ => Task.CompletedTask
+    };
+
     /// <summary>The header chip opens the Check-In page.</summary>
     [RelayCommand]
     private void OpenCheckIn() => SelectedNav = _checkInNav;
@@ -280,15 +321,18 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private static async Task SafeRefreshAsync(IRefreshable refreshable)
+    private static Task SafeRefreshAsync(IRefreshable refreshable) =>
+        SafeRefreshAsync(refreshable, refreshable.RefreshAsync);
+
+    private static async Task SafeRefreshAsync(object page, Func<Task> refresh)
     {
         try
         {
-            await refreshable.RefreshAsync();
+            await refresh();
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to refresh {Page}", refreshable.GetType().Name);
+            Log.Error(ex, "Failed to refresh {Page}", page.GetType().Name);
         }
     }
 }

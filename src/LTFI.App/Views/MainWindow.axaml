@@ -86,6 +86,26 @@
                         <TextBlock Text="{Binding ActiveText}" Classes="num" FontSize="10"
                                    Foreground="{DynamicResource TextMutedBrush}"/>
                     </StackPanel>
+                    <TextBlock Text="·" Foreground="{DynamicResource TextFainterBrush}" VerticalAlignment="Center"/>
+                    <!-- iPhone reminders: last good sync (background 15s check or manual) + a manual SYNC -->
+                    <Panel VerticalAlignment="Center" Background="Transparent"
+                           ToolTip.Tip="{Binding Reminders.HeaderSyncTip}">
+                        <TextBlock Text="{Binding Reminders.HeaderSyncText}" FontSize="10" LetterSpacing="0.6"
+                                   Foreground="{DynamicResource TextDimBrush}"
+                                   IsVisible="{Binding !Reminders.HasSyncProblem}"/>
+                        <TextBlock Text="{Binding Reminders.HeaderSyncText}" FontSize="10" LetterSpacing="0.6"
+                                   Foreground="{DynamicResource WarningBrush}"
+                                   IsVisible="{Binding Reminders.HasSyncProblem}"/>
+                    </Panel>
+                    <Panel VerticalAlignment="Center">
+                        <Button Classes="ghost" Padding="8,2" FontSize="9.5" Content="SYNC"
+                                Command="{Binding SyncNowCommand}"
+                                IsVisible="{Binding !Reminders.IsSyncing}"
+                                ToolTip.Tip="Sync iPhone Reminders now and refresh this page"/>
+                        <TextBlock Text="SYNCING…" FontSize="9.5" LetterSpacing="0.8" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextDimBrush}"
+                                   IsVisible="{Binding Reminders.IsSyncing}"/>
+                    </Panel>
                 </StackPanel>
             </Grid>
         </Border>
