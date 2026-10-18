@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using LTFI.Core.Abstractions;
 using LTFI.Core.Domain;
@@ -63,6 +64,13 @@ public sealed class ReminderOutbox(IDbContextFactory<LtfiDbContext> contextFacto
             }
 
             var text = BuildFileJson(pending, DateTimeOffset.Now);
+            if (File.Exists(path) && HasSameCommands(await File.ReadAllTextAsync(path, cancellationToken), text))
+            {
+                // Nothing changed: leave the file alone so iCloud has nothing to upload.
+                LastError = null;
+                return true;
+            }
+
             var temp = path + ".tmp";
             await File.WriteAllTextAsync(temp, text, cancellationToken);
             File.Move(temp, path, overwrite: true); // atomic replace on the same volume
@@ -77,6 +85,24 @@ public sealed class ReminderOutbox(IDbContextFactory<LtfiDbContext> contextFacto
         finally
         {
             _writeGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// True when two outbox files list the same commands (ignoring <c>writtenAt</c>); false when
+    /// either isn't valid outbox JSON.
+    /// </summary>
+    public static bool HasSameCommands(string existingJson, string newJson)
+    {
+        try
+        {
+            var existing = JsonNode.Parse(existingJson)?["commands"];
+            var updated = JsonNode.Parse(newJson)?["commands"];
+            return existing is not null && updated is not null && JsonNode.DeepEquals(existing, updated);
+        }
+        catch (JsonException)
+        {
+            return false;
         }
     }
 

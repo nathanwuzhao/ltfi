@@ -348,4 +348,27 @@ public sealed class WriteBackTests : IDisposable
         Assert.Null(outbox.LastError);
         Assert.Contains("\"op\": \"create\"", File.ReadAllText(missing));
     }
+    [Fact]
+    public async Task Flush_leaves_the_file_alone_when_the_commands_have_not_changed()
+    {
+        var outbox = new ReminderOutbox(_factory, () => OutboxPath);
+        await NewTasks(outbox).CreateAsync(new TaskDraft { Title = "Once" });
+        var written = File.GetLastWriteTimeUtc(OutboxPath);
+        var text = File.ReadAllText(OutboxPath);
+
+        File.SetLastWriteTimeUtc(OutboxPath, written.AddMinutes(-5));
+        Assert.True(await outbox.FlushAsync());
+        Assert.Equal(written.AddMinutes(-5), File.GetLastWriteTimeUtc(OutboxPath));
+        Assert.Equal(text, File.ReadAllText(OutboxPath));
+
+        await NewTasks(outbox).CreateAsync(new TaskDraft { Title = "Twice" });
+        Assert.NotEqual(text, File.ReadAllText(OutboxPath));
+    }
+
+    [Theory]
+    [InlineData("{\"writtenAt\":\"a\",\"commands\":[{\"op\":\"create\"}]}", "{\"writtenAt\":\"b\",\"commands\":[{\"op\":\"create\"}]}", true)]
+    [InlineData("{\"commands\":[]}", "{\"commands\":[{\"op\":\"create\"}]}", false)]
+    [InlineData("not json", "{\"commands\":[]}", false)]
+    public void HasSameCommands_ignores_writtenAt(string existing, string updated, bool expected) =>
+        Assert.Equal(expected, ReminderOutbox.HasSameCommands(existing, updated));
 }
